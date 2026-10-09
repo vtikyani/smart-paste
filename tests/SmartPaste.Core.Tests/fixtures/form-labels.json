@@ -1,0 +1,402 @@
+[
+  {
+    "label": "First name",
+    "source": "shopify",
+    "expected": "first_name"
+  },
+  {
+    "label": "Last name",
+    "source": "shopify",
+    "expected": "last_name"
+  },
+  {
+    "label": "Email",
+    "source": "shopify",
+    "expected": "email"
+  },
+  {
+    "label": "Phone",
+    "source": "shopify",
+    "expected": "phone"
+  },
+  {
+    "label": "Address",
+    "source": "shopify",
+    "expected": "street"
+  },
+  {
+    "label": "Apartment, suite, etc.",
+    "source": "shopify",
+    "expected": "unit"
+  },
+  {
+    "label": "City",
+    "source": "shopify",
+    "expected": "city"
+  },
+  {
+    "label": "State",
+    "source": "shopify",
+    "expected": "state"
+  },
+  {
+    "label": "ZIP code",
+    "source": "shopify",
+    "expected": "zip"
+  },
+  {
+    "label": "Country/region",
+    "source": "shopify",
+    "expected": "country"
+  },
+  {
+    "label": "Full name",
+    "source": "stripe",
+    "expected": "full_name"
+  },
+  {
+    "label": "Email address",
+    "source": "stripe",
+    "expected": "email"
+  },
+  {
+    "label": "Address line 1",
+    "source": "stripe",
+    "expected": "street"
+  },
+  {
+    "label": "Address line 2",
+    "source": "stripe",
+    "expected": "unit"
+  },
+  {
+    "label": "Postal code",
+    "source": "stripe",
+    "expected": "zip"
+  },
+  {
+    "label": "Card number",
+    "source": "stripe",
+    "expected": "none"
+  },
+  {
+    "label": "CVC",
+    "source": "stripe",
+    "expected": "none"
+  },
+  {
+    "label": "Expiration date",
+    "source": "stripe",
+    "expected": "none"
+  },
+  {
+    "label": "Your name",
+    "source": "amazon",
+    "expected": "full_name"
+  },
+  {
+    "label": "Mobile number",
+    "source": "amazon",
+    "expected": "phone"
+  },
+  {
+    "label": "Street address",
+    "source": "amazon",
+    "expected": "street"
+  },
+  {
+    "label": "Apt, suite, etc. (optional)",
+    "source": "amazon",
+    "expected": "unit"
+  },
+  {
+    "label": "Town/City",
+    "source": "amazon",
+    "expected": "city"
+  },
+  {
+    "label": "State / Province",
+    "source": "amazon",
+    "expected": "state"
+  },
+  {
+    "label": "ZIP / Postal Code",
+    "source": "amazon",
+    "expected": "zip"
+  },
+  {
+    "label": "Country",
+    "source": "amazon",
+    "expected": "country"
+  },
+  {
+    "label": "Promo code",
+    "source": "amazon",
+    "expected": "none"
+  },
+  {
+    "label": "First Name",
+    "source": "greenhouse",
+    "expected": "first_name"
+  },
+  {
+    "label": "Last Name",
+    "source": "greenhouse",
+    "expected": "last_name"
+  },
+  {
+    "label": "Email",
+    "source": "greenhouse",
+    "expected": "email"
+  },
+  {
+    "label": "Phone",
+    "source": "greenhouse",
+    "expected": "phone"
+  },
+  {
+    "label": "Location (City)",
+    "source": "greenhouse",
+    "expected": "city"
+  },
+  {
+    "label": "Current Company",
+    "source": "greenhouse",
+    "expected": "company"
+  },
+  {
+    "label": "Current Title",
+    "source": "greenhouse",
+    "expected": "title"
+  },
+  {
+    "label": "LinkedIn Profile",
+    "source": "greenhouse",
+    "expected": "linkedin"
+  },
+  {
+    "label": "Website",
+    "source": "greenhouse",
+    "expected": "website"
+  },
+  {
+    "label": "Cover Letter",
+    "source": "greenhouse",
+    "expected": "none"
+  },
+  {
+    "label": "How did you hear about us?",
+    "source": "greenhouse",
+    "expected": "none"
+  },
+  {
+    "label": "Legal First Name*",
+    "source": "workday",
+    "expected": "first_name"
+  },
+  {
+    "label": "Legal Middle Name",
+    "source": "workday",
+    "expected": "middle_name"
+  },
+  {
+    "label": "Legal Last Name*",
+    "source": "workday",
+    "expected": "last_name"
+  },
+  {
+    "label": "Preferred Name",
+    "source": "workday",
+    "expected": "first_name"
+  },
+  {
+    "label": "Primary Email Address",
+    "source": "workday",
+    "expected": "email"
+  },
+  {
+    "label": "Mobile Phone",
+    "source": "workday",
+    "expected": "phone"
+  },
+  {
+    "label": "Address Line 1",
+    "source": "workday",
+    "expected": "street"
+  },
+  {
+    "label": "Address Line 2",
+    "source": "workday",
+    "expected": "unit"
+  },
+  {
+    "label": "City",
+    "source": "workday",
+    "expected": "city"
+  },
+  {
+    "label": "State/Province",
+    "source": "workday",
+    "expected": "state"
+  },
+  {
+    "label": "Postal Code",
+    "source": "workday",
+    "expected": "zip"
+  },
+  {
+    "label": "Date of Birth",
+    "source": "workday",
+    "expected": "date_of_birth"
+  },
+  {
+    "label": "Are you legally authorized to work in the United States?",
+    "source": "workday",
+    "expected": "none"
+  },
+  {
+    "label": "Emergency contact name",
+    "source": "workday",
+    "expected": "none"
+  },
+  {
+    "label": "Given Name",
+    "source": "ashby",
+    "expected": "first_name"
+  },
+  {
+    "label": "Family Name",
+    "source": "ashby",
+    "expected": "last_name"
+  },
+  {
+    "label": "Email Address",
+    "source": "ashby",
+    "expected": "email"
+  },
+  {
+    "label": "Phone Number",
+    "source": "ashby",
+    "expected": "phone"
+  },
+  {
+    "label": "LinkedIn URL",
+    "source": "ashby",
+    "expected": "linkedin"
+  },
+  {
+    "label": "Portfolio URL",
+    "source": "ashby",
+    "expected": "website"
+  },
+  {
+    "label": "Current employer",
+    "source": "ashby",
+    "expected": "company"
+  },
+  {
+    "label": "Job Title",
+    "source": "ashby",
+    "expected": "title"
+  },
+  {
+    "label": "Referrer name",
+    "source": "ashby",
+    "expected": "none"
+  },
+  {
+    "label": "Recruiter email",
+    "source": "ashby",
+    "expected": "none"
+  },
+  {
+    "label": "Name",
+    "source": "lever",
+    "expected": "full_name"
+  },
+  {
+    "label": "Email",
+    "source": "lever",
+    "expected": "email"
+  },
+  {
+    "label": "Phone",
+    "source": "lever",
+    "expected": "phone"
+  },
+  {
+    "label": "Organization",
+    "source": "lever",
+    "expected": "company"
+  },
+  {
+    "label": "Position",
+    "source": "lever",
+    "expected": "title"
+  },
+  {
+    "label": "LinkedIn",
+    "source": "lever",
+    "expected": "linkedin"
+  },
+  {
+    "label": "Personal website",
+    "source": "lever",
+    "expected": "website"
+  },
+  {
+    "label": "Additional information",
+    "source": "lever",
+    "expected": "none"
+  },
+  {
+    "label": "Reference phone",
+    "source": "lever",
+    "expected": "none"
+  },
+  {
+    "label": "Billing address",
+    "source": "shopify",
+    "expected": "street"
+  },
+  {
+    "label": "Shipping address",
+    "source": "shopify",
+    "expected": "street"
+  },
+  {
+    "label": "Billing city",
+    "source": "shopify",
+    "expected": "city"
+  },
+  {
+    "label": "Shipping postal code",
+    "source": "shopify",
+    "expected": "zip"
+  },
+  {
+    "label": "Company name",
+    "source": "shopify",
+    "expected": "company"
+  },
+  {
+    "label": "Tax ID",
+    "source": "stripe",
+    "expected": "none"
+  },
+  {
+    "label": "Gift card code",
+    "source": "shopify",
+    "expected": "none"
+  },
+  {
+    "label": "Manager name",
+    "source": "workday",
+    "expected": "none"
+  },
+  {
+    "label": "Middle initial",
+    "source": "workday",
+    "expected": "middle_name"
+  }
+]
