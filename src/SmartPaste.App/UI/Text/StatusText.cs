@@ -63,9 +63,11 @@ internal static class StatusText
             : "Clears in under a minute";
 
     // When a pause ends: "3:40 PM" today, "tomorrow" at midnight, "tomorrow at 9:00 AM", or "Wed 9:00 AM".
+    // Compared at the minute shown: a pause set for midnight is stored a moment after it.
     public static string Until(DateTimeOffset until, DateTimeOffset now, CultureInfo culture)
     {
-        var end = until.ToLocalTime();
+        var local = until.ToLocalTime();
+        var end = local.AddTicks(-(local.Ticks % TimeSpan.TicksPerMinute));
         var today = now.ToLocalTime().Date;
         var time = end.ToString("t", culture);
         if (end.Date == today) return time;

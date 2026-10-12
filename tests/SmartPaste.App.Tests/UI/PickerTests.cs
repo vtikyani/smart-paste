@@ -137,6 +137,24 @@ public sealed class PickerTests
     }
 
     [Fact]
+    public async Task AltGrCharactersFilterInsteadOfClosingOrChoosing()
+    {
+        const KeyModifiers AltGr = KeyModifiers.Control | KeyModifiers.Alt;
+        var result = await Pick(AllValues(), async (keys, feedback) =>
+        {
+            // AltGr+Q types @ on German keyboards; AltGr+7 types {, which must not choose row 7.
+            await Press(keys, 0x51, '@', AltGr);
+            await Press(keys, 0x37, '{', AltGr);
+            Assert.Equal("@{", feedback.Picker.ViewModel.Filter);
+            await Press(keys, VkBack);
+            await Press(keys, VkBack);
+            // A real Ctrl+Alt shortcut types nothing: it goes to the app.
+            await Press(keys, 0x54, null, AltGr, accepted: false);
+        });
+        Assert.Equal(PickOutcome.Dismissed, result.Outcome);
+    }
+
+    [Fact]
     public async Task TypingIntoAShortListGoesToTheApp()
     {
         var result = await Pick(DocSample.NamePick(Anchor), (keys, _) => Press(keys, 0x58, 'x', accepted: false));

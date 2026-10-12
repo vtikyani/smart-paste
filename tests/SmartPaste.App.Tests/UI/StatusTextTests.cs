@@ -112,6 +112,16 @@ public sealed class StatusTextTests
     }
 
     [Fact]
+    public void PauseUntilTomorrowReadsTomorrow()
+    {
+        // The pause length comes from one clock reading and is added to a later one, so the stored end lands a
+        // moment after midnight.
+        var length = PauseOption.UntilMidnight(Now);
+        var storedEnd = Now + length + TimeSpan.FromMilliseconds(3);
+        Assert.Equal("tomorrow", StatusText.Until(storedEnd, Now, English));
+    }
+
+    [Fact]
     public void ServicesPutRejectedKeysFirst()
     {
         Assert.Equal("Jev key rejected", StatusText.Services(ServiceStatus.KeyRejected, ServiceStatus.OutOfCredits).Text);

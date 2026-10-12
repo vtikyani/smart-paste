@@ -117,10 +117,10 @@ internal sealed class PickSession : IKeySink
             case VkReturn:
                 if (list.Selected is { } selected) Finish(PickResult.Chose(selected.Candidate));
                 return;
-            case >= Vk1 and <= Vk9:
+            case >= Vk1 and <= Vk9 when key.Modifiers == KeyModifiers.None:
                 Choose(list.RowForNumber(key.VirtualKey - Vk1 + 1));
                 return;
-            case >= VkNumpad1 and <= VkNumpad9:
+            case >= VkNumpad1 and <= VkNumpad9 when (key.Modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) == 0:
                 Choose(list.RowForNumber(key.VirtualKey - VkNumpad1 + 1));
                 return;
             case VkUp:
@@ -172,21 +172,28 @@ internal sealed class PickSession : IKeySink
     // Alt, or Windows, goes to the app and closes the picker.
     private bool Wanted(in KeyStroke key)
     {
-        if ((key.Modifiers & (KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Windows)) != 0) return false;
+        const KeyModifiers Shortcut = KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Windows;
+        if ((key.Modifiers & Shortcut) != 0)
+        {
+            // AltGr arrives as Ctrl+Alt. On many layouts it types characters people filter with (@, €, {).
+            var altGr = (key.Modifiers & Shortcut) == (KeyModifiers.Control | KeyModifiers.Alt);
+            return altGr && _filterable && IsPrintable(key.Character);
+        }
         switch (key.VirtualKey)
         {
             case VkEscape or VkReturn or VkUp or VkDown:
                 return true;
             case VkPrior or VkNext or VkHome or VkEnd or VkBack:
                 return _filterable;
-            case >= Vk1 and <= Vk9:
-                if ((key.Modifiers & KeyModifiers.Shift) == 0) return true;
-                break;
+            case >= Vk1 and <= Vk9 when key.Modifiers == KeyModifiers.None:
+                return true;
             case >= VkNumpad1 and <= VkNumpad9:
                 return true;
         }
-        return _filterable && key.Character is { } c && !char.IsControl(c);
+        return _filterable && IsPrintable(key.Character);
     }
+
+    private static bool IsPrintable(char? character) => character is { } c && !char.IsControl(c);
 
     private static bool IsModifier(int virtualKey) =>
         virtualKey is VkShift or VkControl or VkMenu or VkCapital or VkLeftWindows or VkRightWindows or VkNumLock or VkScrollLock
