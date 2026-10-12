@@ -1,0 +1,70 @@
+<!--
+  Shortcut recorder. Select it (or press Enter or Space while it has focus), then press the keys: the shortcut is
+  recorded as soon as a key is pressed while Ctrl, Alt, or the Windows key is held. Esc cancels, the X button
+  turns the shortcut off.
+-->
+<UserControl
+  x:Class="SmartPaste.App.UI.Controls.HotkeyBox"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  MinWidth="236"
+  Focusable="True"
+  IsTabStop="True"
+  FocusVisualStyle="{DynamicResource DefaultControlFocusVisualStyle}"
+  AutomationProperties.HelpText="Select, then press the keys you want. Esc cancels.">
+
+  <UserControl.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="HotkeyBox.KeyCaps.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+    </ResourceDictionary>
+  </UserControl.Resources>
+
+  <Border
+    x:Name="Frame"
+    MinHeight="36"
+    Padding="6,0,2,0"
+    Background="{DynamicResource ControlFillColorDefaultBrush}"
+    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+    BorderThickness="1"
+    CornerRadius="{DynamicResource ControlCornerRadius}"
+    Cursor="Hand"
+    MouseLeftButtonUp="OnFrameClick">
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+
+      <StackPanel VerticalAlignment="Center" Orientation="Horizontal">
+        <ItemsControl x:Name="Caps" Style="{StaticResource KeyCap.Row}" />
+        <TextBlock
+          x:Name="Prompt"
+          Margin="2,0,8,0"
+          VerticalAlignment="Center"
+          FontSize="13"
+          Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+          TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+
+      <ui:Button
+        x:Name="ClearButton"
+        Grid.Column="1"
+        Margin="2"
+        Padding="7"
+        VerticalAlignment="Center"
+        Appearance="Transparent"
+        BorderBrush="Transparent"
+        MouseOverBorderBrush="Transparent"
+        PressedBorderBrush="Transparent"
+        AutomationProperties.Name="Turn off this shortcut"
+        Click="OnClearClick"
+        Cursor="Arrow"
+        Icon="{ui:SymbolIcon Dismiss16}"
+        ToolTip="Turn off this shortcut" />
+    </Grid>
+  </Border>
+</UserControl>
