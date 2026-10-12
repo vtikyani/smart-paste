@@ -65,8 +65,9 @@ internal sealed class ClipboardPaster : IDisposable
     public IntPtr WindowHandle => _window.Handle;
 
     // Cancellation is honored until Ctrl+V is sent; after that the paste is seen through, because restoring the
-    // clipboard early could make the target paste the whole original copy.
-    public async Task<PasteOutcome> PasteValueAsync(string value, PasteTarget target, CancellationToken ct)
+    // clipboard early could make the target paste the whole original copy. delivered runs once the target has read
+    // the value (or will not), before the grace period and the restore: keys typed meanwhile may go on from there.
+    public async Task<PasteOutcome> PasteValueAsync(string value, PasteTarget target, CancellationToken ct, Action? delivered = null)
     {
         ArgumentNullException.ThrowIfNull(value);
         ArgumentNullException.ThrowIfNull(target);
@@ -102,6 +103,7 @@ internal sealed class ClipboardPaster : IDisposable
             {
                 // The target never read the value; restore anyway so the clipboard is not left borrowed.
             }
+            delivered?.Invoke();
             if (session.Consumed && !session.Superseded) await Task.Delay(Grace);
 
             var restore = await RestoreWithRetryAsync(session, snapshot);
