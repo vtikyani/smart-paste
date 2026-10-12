@@ -77,7 +77,8 @@ public static partial class LocalExtractor
 
     // A heading ("Shipping Address", "Bill to:") starts a block for that address, which ends at the next heading, or at
     // a blank line once it has content. An inline address label ("Billing address: 123 Main St") takes in only the
-    // unlabeled lines right under it: the rest of that address. Everything else is the person's.
+    // address lines right under it (a street, a unit, a city with its postal code), so an email address on the next
+    // line stays the person's. Everything else is the person's.
     private static Layout Lay(LabelLines.Block block)
     {
         var entityOf = new string?[block.Free.Count];
@@ -109,7 +110,7 @@ public static partial class LocalExtractor
                 if (heading.Rest.Length > 0) section.Lines.Add(heading.Rest);
                 continue;
             }
-            if (inline && block.IsLabeled(i)) (current, inline, section) = (null, false, null);
+            if (inline && (block.IsLabeled(i) || !IsAddressLine(line))) (current, inline, section) = (null, false, null);
             entityOf[i] = current;
             var entity = current ?? Person;
             if (section is null || section.Entity != entity)
@@ -121,6 +122,14 @@ public static partial class LocalExtractor
             hasContent = true;
         }
         return new Layout(entityOf, sections);
+    }
+
+    // A line that carries an address on: a street, a unit, or a city with its postal code.
+    private static bool IsAddressLine(string line)
+    {
+        var text = TextHeuristics.MaskLinks(line);
+        return AddressPatterns.FindStreet(text) is not null || AddressPatterns.UnitOnly(text) is not null ||
+               AddressPatterns.FindCityStateZip(text) is not null || AddressPatterns.FindCityZip(text, 0, usZip: true) is not null;
     }
 
     private static void AddLabeled(Dictionary<string, string> fields, string key, string value)

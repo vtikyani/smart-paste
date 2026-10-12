@@ -297,6 +297,37 @@ public class LocalExtractorTests
         Assert.Equal("jordan@example.com", Value(profile, FieldKeys.Email, "person"));
     }
 
+    // The block the end-to-end run copies: the email after the two inline addresses is the person's.
+    [Fact]
+    public void LinesAfterInlineAddressesStayThePersons()
+    {
+        const string text = "Jordan Rivera\r\nBilling address: 1 Main St, Springfield, NJ 07081\r\n" +
+                            "Shipping address: 2 Oak Ave, Trenton, NJ 08608\r\njordan.rivera@example.com";
+        var profile = LocalExtractor.Extract(text, Now);
+        Assert.Equal("Jordan Rivera", Value(profile, FieldKeys.FullName, "person"));
+        Assert.Equal("jordan.rivera@example.com", Value(profile, FieldKeys.Email, "person"));
+        Assert.Equal("1 Main St", Value(profile, FieldKeys.Street, "billing address"));
+        Assert.Equal("Springfield", Value(profile, FieldKeys.City, "billing address"));
+        Assert.Equal("2 Oak Ave", Value(profile, FieldKeys.Street, "shipping address"));
+        Assert.Equal("08608", Value(profile, FieldKeys.Zip, "shipping address"));
+        Assert.Null(Value(profile, FieldKeys.Email, "shipping address"));
+    }
+
+    // The welcome tour's practice block.
+    [Fact]
+    public void ThePracticeBlock()
+    {
+        const string text = "Jordan Rivera\njordan.rivera@example.com\n(201) 555-0143\n48 Maple Avenue\nHoboken, NJ 07030";
+        Assert.True(TextHeuristics.LooksMultiField(text));
+        var profile = LocalExtractor.Extract(text, Now);
+        Assert.Equal("Jordan", Value(profile, FieldKeys.FirstName));
+        Assert.Equal("(201) 555-0143", Value(profile, FieldKeys.Phone));
+        Assert.Equal("48 Maple Avenue", Value(profile, FieldKeys.Street));
+        Assert.Equal("Hoboken", Value(profile, FieldKeys.City));
+        Assert.Equal("07030", Value(profile, FieldKeys.Zip));
+        Assert.Single(profile.Entities);
+    }
+
     [Fact]
     public void LabeledLinesUnderAHeadingBelongToItsAddress()
     {
