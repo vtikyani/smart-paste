@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Smart Paste E2E checkout</title>
+  <style>
+    body { font: 15px "Segoe UI", sans-serif; margin: 32px; max-width: 520px; }
+    fieldset { border: 1px solid #ccc; border-radius: 8px; margin: 0 0 18px; padding: 12px 16px; }
+    label { display: block; margin: 10px 0 4px; }
+    input { width: 100%; box-sizing: border-box; padding: 6px 8px; font: inherit; }
+  </style>
+</head>
+<body>
+  <h1>Checkout</h1>
+  <fieldset>
+    <legend>Contact</legend>
+    <label for="first">First name</label>
+    <input id="first" name="first" autocomplete="given-name">
+    <label for="last">Last name</label>
+    <input id="last" name="last" autocomplete="family-name">
+    <input id="email" name="email" placeholder="Email address" aria-label="Email address">
+    <label>Phone <input id="phone" name="phone" placeholder="(555) 555-5555"></label>
+  </fieldset>
+  <fieldset>
+    <legend>Shipping address</legend>
+    <label for="street">Street address</label>
+    <input id="street" name="street">
+    <label for="city">City</label>
+    <input id="city" name="city">
+    <label for="zip">ZIP code</label>
+    <input id="zip" name="zip" maxlength="5">
+  </fieldset>
+  <fieldset>
+    <legend>Payment</legend>
+    <label for="card">Card number</label>
+    <input id="card" name="card">
+  </fieldset>
+</body>
+</html>

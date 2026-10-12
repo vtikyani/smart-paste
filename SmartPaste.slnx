@@ -6,6 +6,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/SmartPaste.App.Tests/SmartPaste.App.Tests.csproj" />
     <Project Path="tests/SmartPaste.Core.Tests/SmartPaste.Core.Tests.csproj" />
+    <Project Path="tests/SmartPaste.E2E/SmartPaste.E2E.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/SmartPaste.LiveRun/SmartPaste.LiveRun.csproj" />
