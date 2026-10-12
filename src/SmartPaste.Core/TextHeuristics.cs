@@ -116,6 +116,9 @@ public static partial class TextHeuristics
         return match.Success ? match.Value : null;
     }
 
+    // Every email address in the text.
+    internal static IEnumerable<string> FindEmails(string text) => EmailRegex().Matches(text).Select(match => match.Value);
+
     // True when the whole value is a phone number written like one.
     internal static bool IsWrittenPhone(string value) => WholePhoneRegex().IsMatch(value);
 
@@ -138,7 +141,7 @@ public static partial class TextHeuristics
 
     // "https://janedoe.dev." and "(see https://janedoe.dev)" end before their punctuation; a link's own brackets stay
     // ("https://en.wikipedia.org/wiki/Mercury_(planet)").
-    private static string TrimLink(string link)
+    internal static string TrimLink(string link)
     {
         var end = link.Length;
         while (end > 0)
