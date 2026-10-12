@@ -1,0 +1,20 @@
+version: 2
+updates:
+  # NuGet packages (Directory.Packages.props) and the vpk tool (.config/dotnet-tools.json). They come in one
+  # weekly pull request, so the Velopack library and vpk move to a new version together.
+  - package-ecosystem: nuget
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      nuget:
+        patterns: ['*']
+
+  # The actions used by the workflows. Dependabot updates both the pinned commit and its version comment.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      github-actions:
+        patterns: ['*']

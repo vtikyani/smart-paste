@@ -1,0 +1,61 @@
+name: Bug report
+description: Something in Smart Paste does not work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this. Please leave out anything private: no copied text, no API keys, no personal details.
+
+  - type: input
+    id: version
+    attributes:
+      label: Smart Paste version
+      description: It is on the About page in Settings.
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      description: Press Win+R, type winver, and press Enter.
+      placeholder: Windows 11 24H2 (build 26100)
+    validations:
+      required: true
+
+  - type: input
+    id: where
+    attributes:
+      label: Where did you paste?
+      description: The app or website, and the field if you can name it.
+      placeholder: Chrome, a job application, the "ZIP code" field
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened?
+      description: What you did, step by step, and what you saw.
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: >
+        The logs are in %LOCALAPPDATA%\SmartPaste\logs. They never contain what you copied, what was pasted, or
+        field labels. Paste the lines from around the time it happened.
+      render: text
+    validations:
+      required: false
