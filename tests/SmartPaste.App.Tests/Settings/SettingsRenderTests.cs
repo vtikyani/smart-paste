@@ -84,7 +84,7 @@ public sealed class SettingsRenderTests
         Populate(ui);
         ui.Apps.Running.Add(new RunningApp("slack.exe", "Slack", null));
         ui.Apps.Running.Add(new RunningApp("Teams.exe", "Microsoft Teams", null));
-        ui.Updates.Available = new FakeUpdate("1.1.0");
+        ui.Updates.Available = new FakeUpdate("1.1.0", "### Added\n- Paste into more kinds of forms\n\n### Fixed\n- Keys typed right after choosing in the picker reach the app");
         UiTestHost.UseTheme(ApplicationTheme.Light);
         var window = new SettingsWindow(ui.Services, ui.Navigator, SettingsPages.Shortcuts);
         try

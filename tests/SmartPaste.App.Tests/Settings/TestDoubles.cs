@@ -93,11 +93,11 @@ internal sealed class FakeConnectionTester : IConnectionTester
     }
 }
 
-internal sealed class FakeUpdate(string version) : AvailableUpdate
+internal sealed class FakeUpdate(string version, string? notes = null) : AvailableUpdate
 {
     public override string Version => version;
 
-    public override string? ReleaseNotesMarkdown => null;
+    public override string? ReleaseNotesMarkdown => notes;
 }
 
 internal sealed class FakeUpdateService : IUpdateService
