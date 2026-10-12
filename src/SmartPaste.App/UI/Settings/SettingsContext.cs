@@ -62,7 +62,7 @@ internal sealed class SettingsContext
         {
             Log.Error("open_link_error", ex);
             Notice.Show(InfoBarSeverity.Warning, "Couldn't open the link",
-                "Windows has no browser set up to open it. Set a default browser in Windows Settings, then try again.");
+                "Windows couldn't open the page. Check that you have a default browser set, then try again.");
         }
     }
 

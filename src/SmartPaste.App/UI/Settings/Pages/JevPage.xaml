@@ -182,7 +182,7 @@
         <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Parsing model" />
         <TextBlock Style="{StaticResource Settings.CardDescription}">
           <Run Text="An OpenRouter model id. The default is" />
-          <Run FontWeight="SemiBold" Text="{Binding DefaultParsingModel, Mode=OneWay}" /><Run Text=", chosen for speed and accuracy." />
+          <Run FontWeight="SemiBold" Text="{Binding DefaultParsingModel, Mode=OneWay}" /><Run Text="." />
         </TextBlock>
         <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
           <ui:TextBox
