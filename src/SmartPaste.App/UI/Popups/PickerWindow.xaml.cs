@@ -36,7 +36,8 @@ internal partial class PickerWindow
 
         var title = ViewModel.Title.EndsWith('?') ? ViewModel.Title : ViewModel.Title + ".";
         var count = Math.Min(ViewModel.Rows.Count, PickerViewModel.Numbered);
-        Announce($"{title} {ViewModel.Rows.Count} choices. Press 1 to {count} to choose, or Escape to paste the original.");
+        var escape = ViewModel.IsFilterable ? "close" : "paste the original";
+        Announce($"{title} {ViewModel.Rows.Count} choices. Press 1 to {count} to choose, or Escape to {escape}.");
     }
 
     // Keeps the picker attached to its anchor after the list changed size.
