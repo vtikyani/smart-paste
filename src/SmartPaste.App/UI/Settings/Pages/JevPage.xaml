@@ -144,7 +144,7 @@
         <StackPanel>
           <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Send Jev requests through" />
           <TextBlock Style="{StaticResource Settings.CardDescription}">
-            <Run Text="Automatic uses your TypeSafe key when one is saved, and OpenRouter otherwise." />
+            <Run Text="Automatic asks TypeSafe first when a TypeSafe key is saved, and asks again through OpenRouter if that fails." />
             <Run Text="{Binding RouteSummary, Mode=OneWay}" />
           </TextBlock>
         </StackPanel>

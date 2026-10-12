@@ -18,6 +18,16 @@
         <ResourceDictionary Source="/SmartPaste;component/UI/Settings/SettingsStyles.xaml" />
       </ResourceDictionary.MergedDictionaries>
 
+      <!-- A list dot, centered on the first line of Settings.Prose text beside it. -->
+      <Style x:Key="Privacy.Dot" TargetType="Ellipse">
+        <Setter Property="Width" Value="4" />
+        <Setter Property="Height" Value="4" />
+        <Setter Property="Margin" Value="2,9,0,0" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="VerticalAlignment" Value="Top" />
+        <Setter Property="Fill" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+      </Style>
+
       <!-- An app's own icon when it's running, a generic one otherwise. -->
       <DataTemplate x:Key="AppIcon" DataType="{x:Type pages:AppItem}">
         <Grid Width="24" Height="24">
@@ -65,7 +75,41 @@
           </Border>
           <StackPanel Grid.Column="1" Margin="16,0,0,0">
             <TextBlock FontWeight="SemiBold" Style="{StaticResource Settings.CardTitle}" Text="When you paste into a form field" />
-            <TextBlock Style="{StaticResource Settings.Prose}" Text="The field's label and nearby text, plus your copied values (shortened), go to Jev through TypeSafe or OpenRouter. With Ask Jev ahead on, this happens when you click into the field." />
+            <TextBlock Style="{StaticResource Settings.Prose}" Text="Jev gets what it needs to choose, through TypeSafe or OpenRouter:" />
+            <!-- Exactly what goes (FieldContext.ToJevState and JevQuestion). The dots are drawn, so screen readers don't say "bullet". -->
+            <Grid Margin="0,4,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Ellipse Style="{StaticResource Privacy.Dot}" />
+              <TextBlock Grid.Column="1" Style="{StaticResource Settings.Prose}" Text="The field: its label, the name screen readers use, its placeholder, help text, type, and length limit, and its id when that reads like words." />
+            </Grid>
+            <Grid Margin="0,2,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Ellipse Style="{StaticResource Privacy.Dot}" />
+              <TextBlock Grid.Column="1" Style="{StaticResource Settings.Prose}" Text="Up to six nearby texts and section names, and label text read from the screen when the field has no label." />
+            </Grid>
+            <Grid Margin="0,2,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Ellipse Style="{StaticResource Privacy.Dot}" />
+              <TextBlock Grid.Column="1" Style="{StaticResource Settings.Prose}" Text="The name of the app you're in." />
+            </Grid>
+            <Grid Margin="0,2,0,0">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="14" />
+                <ColumnDefinition Width="*" />
+              </Grid.ColumnDefinitions>
+              <Ellipse Style="{StaticResource Privacy.Dot}" />
+              <TextBlock Grid.Column="1" Style="{StaticResource Settings.Prose}" Text="Every value from your copied block, each cut to 60 characters, so most are sent whole." />
+            </Grid>
+            <TextBlock Margin="0,6,0,0" Style="{StaticResource Settings.Prose}" Text="With Ask Jev ahead on, this happens when you click into a field." />
           </StackPanel>
         </Grid>
         <Grid Margin="20,0,20,0">
