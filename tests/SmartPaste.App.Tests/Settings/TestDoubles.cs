@@ -134,17 +134,21 @@ internal sealed class FakeUpdateService : IUpdateService
     }
 }
 
-internal sealed class FakePracticeEngine : IPracticeEngine
+internal sealed class FakePracticeEngine : IPracticeEngine, IDisposable
 {
     public Dictionary<string, PracticeResult?> Results { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public List<(string Label, string Text)> Calls { get; } = [];
+
+    public bool IsDisposed { get; private set; }
 
     public Task<PracticeResult?> PasteIntoAsync(string fieldLabel, string clipboardText, CancellationToken ct)
     {
         Calls.Add((fieldLabel, clipboardText));
         return Task.FromResult(Results.GetValueOrDefault(fieldLabel));
     }
+
+    public void Dispose() => IsDisposed = true;
 }
 
 internal sealed class FakeHotkeyStatus : IHotkeyStatus
@@ -194,7 +198,7 @@ internal sealed class TestUi : IDisposable
         Settings = new SettingsStore(Path.Combine(_folder, "settings.json"));
         Controller = new AppController(State, Settings, Dispatcher.CurrentDispatcher);
         Labels = new LabelCache(Path.Combine(_folder, "label-cache.json"));
-        Services = new UiServices(State, Controller, Settings, Labels, Connections, Updates, Practice, Hotkeys,
+        Services = new UiServices(State, Controller, Settings, Labels, Connections, Updates, () => Practice, Hotkeys,
             protectedApps ?? ["1password.exe", "bitwarden.exe", "keepass.exe"])
         {
             Keys = Keys,

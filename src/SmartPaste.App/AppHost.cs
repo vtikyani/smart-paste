@@ -71,7 +71,7 @@ internal sealed class AppHost : IDisposable
             _updateChecks = new UpdateScheduler(_updates, Settings, State, _dispatcher);
 
             _navigator = new WindowNavigator(new UiServices(State, Controller, Settings, _labels, new ConnectionTester(_http),
-                _updates, new PracticeEngine(_http, _decisions, Settings), _hotkeys, InterceptGate.BuiltInBlockedApps));
+                _updates, () => new PracticeEngine(_http, _decisions, Settings), _hotkeys, InterceptGate.BuiltInBlockedApps));
             _ui = new UiShell(State, Controller, Settings, _navigator, _hook);
             _prefetch = new FocusPrefetcher(_focus, _gate, _ocr, _decisions, _profiles, Settings, _ui.PasteFeedback, _dispatcher);
             _pastes = new SmartPasteService(_hook, _hotkeys, _gate, _focus, _paster, _profiles, _decisions, _prefetch,

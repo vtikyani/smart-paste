@@ -5,6 +5,7 @@ using SmartPaste.Core;
 namespace SmartPaste.App.UI.Navigation;
 
 // Everything the settings window and the welcome tour need, handed over by the composition root.
+// CreatePracticeEngine: a new engine for each run of the tour, so nothing it read outlives the tour.
 // ProtectedApps: executable names Smart Paste never touches (password managers and the like), shown read-only.
 internal sealed record UiServices(
     AppState State,
@@ -13,7 +14,7 @@ internal sealed record UiServices(
     LabelCache Labels,
     IConnectionTester Connections,
     IUpdateService Updates,
-    IPracticeEngine Practice,
+    Func<IPracticeEngine> CreatePracticeEngine,
     IHotkeyStatus Hotkeys,
     IReadOnlyList<string> ProtectedApps)
 {
