@@ -6,8 +6,23 @@ public static class ClipboardPrivacy
     public const string HistoryFormat = "CanIncludeInClipboardHistory";
     public const string CloudFormat = "CanUploadToCloudClipboard";
 
+    // Password managers. A copy they own is never read, and Ctrl+V into them is never intercepted. Most of them also
+    // mark copied secrets with ExcludeFormat; this list is the second line of defence. An entry that matches no real
+    // process costs nothing, so names are kept even where only the vendor's installer confirmed them.
     public static readonly IReadOnlySet<string> BlockedOwnerProcesses =
-        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "1Password.exe" };
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "1Password.exe",
+            "Bitwarden.exe",
+            "Enpass.exe",
+            "KeePass.exe",
+            "KeePassXC.exe",
+            "keeperpasswordmanager.exe",
+            "NordPass.exe",
+            "Proton Pass.exe",
+            "pwsafe.exe",
+            "RoboTaskBarIcon.exe"
+        };
 
     public static bool ShouldSkip(
         IReadOnlyCollection<string> formatNames,
