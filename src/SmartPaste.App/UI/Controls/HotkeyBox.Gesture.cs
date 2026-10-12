@@ -1,42 +1,18 @@
 using System.Runtime.InteropServices;
 using System.Windows.Input;
+using SmartPaste.App.Services;
+using SmartPaste.App.Shell;
 
 namespace SmartPaste.App.UI.Controls;
 
-// A global shortcut such as "Win+Alt+V": at least one of Ctrl, Alt, or the Windows key, plus one other key.
-// ToString() is the form AppSettings stores (PickerHotkey, ToggleHotkey); the hotkey manager reads it back with
-// TryParse. Modifiers are written in the order Windows uses in its own docs: Win, Ctrl, Alt, Shift.
+// A global shortcut such as "Win+Alt+V", as the shortcut recorder sees it (WPF keys). Storage goes through the hotkey
+// manager's own Hotkey type: ToString() is Hotkey's canonical text and TryParse reads only that, so whatever the
+// recorder saves in AppSettings (PickerHotkey, ToggleHotkey) is exactly what the hotkey manager can register.
 internal readonly record struct HotkeyGesture(ModifierKeys Modifiers, Key Key)
 {
     private const ModifierKeys Required = ModifierKeys.Control | ModifierKeys.Alt | ModifierKeys.Windows;
 
-    // Stored names for keys whose enum name is ambiguous (Key.Next == Key.PageDown) or unfriendly (Key.D7).
-    private static readonly Dictionary<Key, string> Names = new()
-    {
-        [Key.D0] = "0", [Key.D1] = "1", [Key.D2] = "2", [Key.D3] = "3", [Key.D4] = "4",
-        [Key.D5] = "5", [Key.D6] = "6", [Key.D7] = "7", [Key.D8] = "8", [Key.D9] = "9",
-        [Key.NumPad0] = "Num0", [Key.NumPad1] = "Num1", [Key.NumPad2] = "Num2", [Key.NumPad3] = "Num3",
-        [Key.NumPad4] = "Num4", [Key.NumPad5] = "Num5", [Key.NumPad6] = "Num6", [Key.NumPad7] = "Num7",
-        [Key.NumPad8] = "Num8", [Key.NumPad9] = "Num9",
-        [Key.Multiply] = "NumMultiply", [Key.Add] = "NumAdd", [Key.Subtract] = "NumSubtract",
-        [Key.Decimal] = "NumDecimal", [Key.Divide] = "NumDivide",
-        [Key.Return] = "Enter", [Key.Back] = "Backspace", [Key.Space] = "Space", [Key.Tab] = "Tab",
-        [Key.PageUp] = "PageUp", [Key.PageDown] = "PageDown", [Key.Snapshot] = "PrintScreen",
-        [Key.Scroll] = "ScrollLock", [Key.Pause] = "Pause", [Key.Insert] = "Insert", [Key.Delete] = "Delete",
-        [Key.Home] = "Home", [Key.End] = "End", [Key.Up] = "Up", [Key.Down] = "Down", [Key.Left] = "Left",
-        [Key.Right] = "Right", [Key.Apps] = "Menu",
-        // Punctuation keys move around between keyboard layouts, so they're stored by position, not character.
-        [Key.OemSemicolon] = "OemSemicolon", [Key.OemPlus] = "OemPlus", [Key.OemComma] = "OemComma",
-        [Key.OemMinus] = "OemMinus", [Key.OemPeriod] = "OemPeriod", [Key.OemQuestion] = "OemQuestion",
-        [Key.OemTilde] = "OemTilde", [Key.OemOpenBrackets] = "OemOpenBrackets", [Key.OemPipe] = "OemPipe",
-        [Key.OemCloseBrackets] = "OemCloseBrackets", [Key.OemQuotes] = "OemQuotes", [Key.Oem8] = "Oem8",
-        [Key.OemBackslash] = "OemBackslash"
-    };
-
-    private static readonly Dictionary<string, Key> KeysByName =
-        Names.ToDictionary(p => p.Value, p => p.Key, StringComparer.OrdinalIgnoreCase);
-
-    // Shortcuts that would break typing or Windows itself in every app, so they can't be taken.
+    // Plain-English reasons for the shortcuts that would break typing or Windows itself in every app.
     private static readonly Dictionary<HotkeyGesture, string> Reserved = new()
     {
         [new(ModifierKeys.Control, Key.C)] = "Ctrl+C copies in every app. Pick another shortcut.",
@@ -83,70 +59,67 @@ internal readonly record struct HotkeyGesture(ModifierKeys Modifiers, Key Key)
         return names;
     }
 
+    // Reads the stored form (the hotkey manager's canonical text).
     public static bool TryParse(string? text, out HotkeyGesture gesture)
     {
         gesture = default;
-        if (string.IsNullOrWhiteSpace(text)) return false;
-        var parts = text.Split('+', StringSplitOptions.TrimEntries);
-        if (parts.Length < 2 || parts.Any(p => p.Length == 0)) return false;
-
-        var modifiers = ModifierKeys.None;
-        foreach (var part in parts[..^1])
-        {
-            var modifier = part.ToUpperInvariant() switch
-            {
-                "WIN" or "WINDOWS" => ModifierKeys.Windows,
-                "CTRL" or "CONTROL" => ModifierKeys.Control,
-                "ALT" => ModifierKeys.Alt,
-                "SHIFT" => ModifierKeys.Shift,
-                _ => ModifierKeys.None
-            };
-            if (modifier == ModifierKeys.None || modifiers.HasFlag(modifier)) return false;
-            modifiers |= modifier;
-        }
-
-        if (!TryParseKey(parts[^1], out var key) || IsModifierKey(key)) return false;
-        gesture = new HotkeyGesture(modifiers, key);
-        return gesture.HasRequiredModifier;
+        if (!Hotkey.TryParse(text, out var hotkey)) return false;
+        var key = KeyInterop.KeyFromVirtualKey(hotkey.VirtualKey);
+        if (key == Key.None) return false;
+        gesture = new HotkeyGesture(ToModifierKeys(hotkey.Modifiers), key);
+        return true;
     }
 
     // Why this shortcut can't be used, or null when it can.
     public string? Problem()
     {
         if (!HasRequiredModifier) return "Hold Ctrl, Alt, or the Windows key, then press another key.";
-        return Reserved.GetValueOrDefault(this);
+        if (Reserved.GetValueOrDefault(this) is { } reason) return reason;
+        if (!Hotkey.TryCreate(ToKeyModifiers(Modifiers), VirtualKey, out _, out var error))
+            return error == HotkeyError.Reserved
+                ? "Windows or every app already uses this shortcut. Pick another shortcut."
+                : "This key can't be part of a shortcut. Pick another key.";
+        return null;
     }
 
-    public override string ToString() => string.Join('+', [.. ModifierNames(Modifiers), StoredName(Key)]);
+    // The stored form, for example "Win+Alt+V" or "Ctrl+Alt+Numpad4". Empty for a combination that can't be stored
+    // (Problem() says why).
+    public override string ToString() =>
+        Hotkey.TryCreate(ToKeyModifiers(Modifiers), VirtualKey, out var hotkey, out _) ? hotkey.ToString() : "";
 
-    private static string StoredName(Key key) => Names.GetValueOrDefault(key) ?? key.ToString();
+    private static KeyModifiers ToKeyModifiers(ModifierKeys modifiers) =>
+        (modifiers.HasFlag(ModifierKeys.Windows) ? KeyModifiers.Windows : KeyModifiers.None) |
+        (modifiers.HasFlag(ModifierKeys.Control) ? KeyModifiers.Control : KeyModifiers.None) |
+        (modifiers.HasFlag(ModifierKeys.Alt) ? KeyModifiers.Alt : KeyModifiers.None) |
+        (modifiers.HasFlag(ModifierKeys.Shift) ? KeyModifiers.Shift : KeyModifiers.None);
 
-    private static bool TryParseKey(string name, out Key key)
-    {
-        if (KeysByName.TryGetValue(name, out key)) return true;
-        // Letters and F-keys are stored by their WPF key name. A bare number is not a key name.
-        if (name.All(char.IsAsciiDigit)) return false;
-        return Enum.TryParse(name, ignoreCase: true, out key) && Enum.IsDefined(key) && key != Key.None;
-    }
+    private static ModifierKeys ToModifierKeys(KeyModifiers modifiers) =>
+        ((modifiers & KeyModifiers.Windows) != 0 ? ModifierKeys.Windows : ModifierKeys.None) |
+        ((modifiers & KeyModifiers.Control) != 0 ? ModifierKeys.Control : ModifierKeys.None) |
+        ((modifiers & KeyModifiers.Alt) != 0 ? ModifierKeys.Alt : ModifierKeys.None) |
+        ((modifiers & KeyModifiers.Shift) != 0 ? ModifierKeys.Shift : ModifierKeys.None);
 
-    // What the key shows on a keycap with the current keyboard layout ("." for OemPeriod on a US layout).
+    // What the key shows on a keycap with the current keyboard layout ("." for the period key on a US layout).
     private static string DisplayName(Key key)
     {
         if (key is >= Key.OemSemicolon and <= Key.OemBackslash)
-            return LayoutCharacter(key) ?? StoredName(key);
+            return LayoutCharacter(key) ?? key.ToString();
         return key switch
         {
+            >= Key.D0 and <= Key.D9 => ((char)('0' + (key - Key.D0))).ToString(),
+            >= Key.NumPad0 and <= Key.NumPad9 => "Num " + (key - Key.NumPad0),
             Key.PageUp => "Page Up",
             Key.PageDown => "Page Down",
             Key.Snapshot => "Print Screen",
-            Key.Scroll => "Scroll Lock",
+            Key.Return => "Enter",
+            Key.Back => "Backspace",
+            Key.Escape => "Esc",
             Key.Multiply => "Num *",
             Key.Add => "Num +",
             Key.Subtract => "Num -",
             Key.Decimal => "Num .",
             Key.Divide => "Num /",
-            >= Key.NumPad0 and <= Key.NumPad9 => "Num " + (key - Key.NumPad0),
-            _ => StoredName(key)
+            _ => key.ToString()
         };
     }
 

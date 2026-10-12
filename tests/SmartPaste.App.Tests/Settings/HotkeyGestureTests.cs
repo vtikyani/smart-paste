@@ -22,8 +22,9 @@ public sealed class HotkeyGestureTests
     [InlineData(" Ctrl + Alt + 7 ", "Ctrl+Alt+7")]
     [InlineData("Win+PageDown", "Win+PageDown")]
     [InlineData("Ctrl+Alt+Space", "Ctrl+Alt+Space")]
-    [InlineData("Ctrl+Alt+Num4", "Ctrl+Alt+Num4")]
-    [InlineData("Ctrl+Alt+OemPeriod", "Ctrl+Alt+OemPeriod")]
+    [InlineData("Ctrl+Alt+Numpad4", "Ctrl+Alt+Numpad4")]
+    [InlineData("Ctrl+Alt+.", "Ctrl+Alt+.")]
+    [InlineData("Ctrl+Alt+PgDn", "Ctrl+Alt+PageDown")]
     public void ParsesAnyOrderAndWritesTheStoredForm(string text, string stored)
     {
         Assert.True(HotkeyGesture.TryParse(text, out var gesture));
@@ -76,4 +77,27 @@ public sealed class HotkeyGestureTests
     [Fact]
     public void VirtualKeyMatchesWindows() =>
         Assert.Equal(0x56, new HotkeyGesture(ModifierKeys.Windows | ModifierKeys.Alt, Key.V).VirtualKey);
+
+    // Whatever the recorder stores, the hotkey manager must be able to register: one format, one parser.
+    [Theory]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt, Key.D1)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt, Key.NumPad3)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt, Key.OemPeriod)]
+    [InlineData(ModifierKeys.Windows | ModifierKeys.Shift, Key.F9)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt, Key.Multiply)]
+    [InlineData(ModifierKeys.Control | ModifierKeys.Alt, Key.Back)]
+    public void StoredFormIsWhatTheHotkeyManagerReads(ModifierKeys modifiers, Key key)
+    {
+        var gesture = new HotkeyGesture(modifiers, key);
+        Assert.Null(gesture.Problem());
+        Assert.True(SmartPaste.App.Shell.Hotkey.TryParse(gesture.ToString(), out var hotkey));
+        Assert.Equal(gesture.VirtualKey, hotkey.VirtualKey);
+        Assert.True(HotkeyGesture.TryParse(gesture.ToString(), out var again));
+        Assert.Equal(gesture, again);
+    }
+
+    [Fact]
+    public void KeysTheHotkeyManagerCannotRegisterAreRefused() =>
+        Assert.Equal("This key can't be part of a shortcut. Pick another key.",
+            new HotkeyGesture(ModifierKeys.Control | ModifierKeys.Alt, Key.Scroll).Problem());
 }
