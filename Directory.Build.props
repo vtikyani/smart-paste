@@ -29,4 +29,10 @@
     <PathMap>$(RepoRoot)=/_/</PathMap>
     <DebugType>embedded</DebugType>
   </PropertyGroup>
+
+  <!-- PathMap does not cover the Source Link map in the embedded debug info; deterministic source paths do.
+       Only inside a git checkout (Source Link needs one), so building from a source zip still works. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Release' and Exists('$(RepoRoot).git')">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
 </Project>
