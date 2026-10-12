@@ -41,6 +41,12 @@
     <Resource Include="Assets\SmartPaste.ico" />
   </ItemGroup>
 
+  <!-- Inter, Smart Paste's typeface (SIL OFL 1.1, Assets/Fonts/Inter-LICENSE.txt): fixed-weight files made from Inter
+       4.001's variable font, because WPF draws a variable font only at its default weight. Brand.xaml uses them. -->
+  <ItemGroup>
+    <Resource Include="Assets\Fonts\*.ttf" />
+  </ItemGroup>
+
   <!-- Program.Main starts the app (Velopack must run first), so App.xaml must not generate a Main of its own. -->
   <ItemGroup>
     <ApplicationDefinition Remove="App.xaml" />

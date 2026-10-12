@@ -12,6 +12,7 @@
   MinHeight="0"
   Background="{DynamicResource ApplicationBackgroundBrush}"
   ExtendsContentIntoTitleBar="True"
+  FontFamily="{DynamicResource Brand.FontText}"
   ResizeMode="NoResize"
   ShowInTaskbar="False"
   SizeToContent="Height"

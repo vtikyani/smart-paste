@@ -33,6 +33,26 @@ public sealed class ThemeTests : IDisposable
         Assert.Contains("CardBackgroundFillColorDefaultBrush", light);
     });
 
+    // Each weight is its own file, named into one family, so medium and semibold text are real faces, never a bold
+    // that WPF fakes from the regular one.
+    [Theory]
+    [InlineData("Inter", new[] { 400, 500, 600, 700 })]
+    [InlineData("Inter Display", new[] { 600, 700 })]
+    public void TheBundledTypefaceHasARealFaceForEveryWeight(string family, int[] weights) => WpfHost.Run(() =>
+    {
+        var fonts = new FontFamily(new Uri("pack://application:,,,/SmartPaste;component/Assets/Fonts/"), "./#" + family);
+        // WPF also lists a slanted copy of each face it would simulate for italics; only upright faces count.
+        var found = fonts.GetTypefaces()
+            .Where(t => t.Style == FontStyles.Normal && !t.IsObliqueSimulated)
+            .Where(t => t.TryGetGlyphTypeface(out var glyphs) && !t.IsBoldSimulated && glyphs.Weight == t.Weight)
+            .Select(t => t.Weight.ToOpenTypeWeight())
+            .Order()
+            .ToArray();
+        Assert.Equal(weights, found);
+        Assert.Contains("#" + family + ",", ((FontFamily)Application.Current.FindResource(
+            family == "Inter" ? "Brand.FontText" : "Brand.FontDisplay")).Source, StringComparison.Ordinal);
+    });
+
     [Fact]
     public void LogoImagesAreAvailableToEveryWindow() => WpfHost.Run(() =>
     {

@@ -56,9 +56,11 @@
   <Thickness x:Key="Brand.PadXL">24</Thickness>
   <Thickness x:Key="Brand.PadXXL">32</Thickness>
 
-  <!-- Type scale (Segoe UI Variable on Windows 11, Segoe UI on Windows 10) -->
-  <FontFamily x:Key="Brand.FontText">Segoe UI Variable Text, Segoe UI</FontFamily>
-  <FontFamily x:Key="Brand.FontDisplay">Segoe UI Variable Display, Segoe UI</FontFamily>
+  <!-- Type: Inter, bundled (Assets/Fonts), with Inter Display for large titles. Windows' own UI font fills in any
+       character Inter doesn't have. WPF-UI's controls use the same family through its own key. -->
+  <FontFamily x:Key="Brand.FontText">/SmartPaste;component/Assets/Fonts/#Inter, Segoe UI Variable Text, Segoe UI</FontFamily>
+  <FontFamily x:Key="Brand.FontDisplay">/SmartPaste;component/Assets/Fonts/#Inter Display, Segoe UI Variable Display, Segoe UI</FontFamily>
+  <FontFamily x:Key="ContentControlThemeFontFamily">/SmartPaste;component/Assets/Fonts/#Inter, Segoe UI Variable Text, Segoe UI</FontFamily>
   <FontFamily x:Key="Brand.FontMono">Cascadia Mono, Consolas</FontFamily>
   <sys:Double x:Key="Brand.SizeCaption">12</sys:Double>
   <sys:Double x:Key="Brand.SizeBody">14</sys:Double>

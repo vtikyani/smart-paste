@@ -12,6 +12,7 @@ metadata and license files.
 | H.NotifyIcon.Wpf | 2.4.1 | MIT | [github.com/HavenDV/H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon) |
 | H.NotifyIcon | 2.4.1 | MIT | [github.com/HavenDV/H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon) |
 | H.GeneratedIcons.System.Drawing | 2.4.1 | MIT | [github.com/HavenDV/H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon) |
+| Inter typeface (Inter and Inter Display, fixed-weight files made from the variable font) | 4.001 | SIL Open Font License 1.1 | [github.com/rsms/inter](https://github.com/rsms/inter) |
 | Interop.UIAutomationClient | 10.19041.0 | MIT | [github.com/Roemer/UIAutomation-Interop](https://github.com/Roemer/UIAutomation-Interop) |
 | Velopack | 1.2.161 | MIT | [github.com/velopack/velopack](https://github.com/velopack/velopack) |
 | Velopack installer and updater (Setup.exe, Update.exe, and the `Smart Paste.exe` launcher), from the vpk package | 1.2.161 | MIT | [github.com/velopack/velopack](https://github.com/velopack/velopack) |
@@ -72,6 +73,16 @@ SOFTWARE.
 
 Source of this text: [LICENSE.md](https://github.com/HavenDV/H.NotifyIcon/blob/bcaaabecf16566dd910a3798fe874014e251b28d/LICENSE.md)
 at the commit the 2.4.1 packages were built from.
+
+## Inter 4.001
+
+Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
+
+Smart Paste bundles fixed-weight files (Regular, Medium, SemiBold, Bold, and Inter Display SemiBold and Bold) made
+from Inter's variable font, `InterVariable.ttf`, with fontTools' instancer. They are licensed under the SIL Open Font
+License, Version 1.1, like the original. The full license text ships next to the fonts in
+[src/SmartPaste.App/Assets/Fonts/Inter-LICENSE.txt](src/SmartPaste.App/Assets/Fonts/Inter-LICENSE.txt) and is also
+available with a FAQ at [openfontlicense.org](https://openfontlicense.org).
 
 ## Interop.UIAutomationClient 10.19041.0
 

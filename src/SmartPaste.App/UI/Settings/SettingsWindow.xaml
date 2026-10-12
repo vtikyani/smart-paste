@@ -17,6 +17,7 @@
   MinHeight="600"
   Background="{DynamicResource ApplicationBackgroundBrush}"
   ExtendsContentIntoTitleBar="True"
+  FontFamily="{DynamicResource Brand.FontText}"
   WindowBackdropType="None"
   WindowCornerPreference="Round"
   WindowStartupLocation="CenterScreen">
