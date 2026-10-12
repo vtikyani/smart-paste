@@ -126,6 +126,44 @@ public interface IConnectionTester
     Task<ConnectionCheck> CheckTypeSafeAsync(string apiKey, CancellationToken ct);
 }
 
+// ---- Window navigation: implemented by the settings/welcome UI, used by the tray and flyout ----
+
+public static class SettingsPages
+{
+    public const string General = "general";
+    public const string Jev = "jev";
+    public const string Privacy = "privacy";
+    public const string LearnedLabels = "labels";
+    public const string Shortcuts = "shortcuts";
+    public const string About = "about";
+}
+
+public interface IWindowNavigator
+{
+    // Opens (or brings forward) the settings window, optionally on one of the SettingsPages.
+    void ShowSettings(string? page = null);
+
+    // Opens (or brings forward) the welcome tour.
+    void ShowOnboarding();
+}
+
+// ---- Global shortcuts: implemented by the hotkey manager, shown on the shortcuts page ----
+
+public static class HotkeyNames
+{
+    public const string Picker = "picker";
+    public const string Toggle = "toggle";
+}
+
+public interface IHotkeyStatus
+{
+    // True when the shortcut is registered, false when another app already owns that key combination,
+    // null when no shortcut is set.
+    bool? IsRegistered(string name);
+
+    event EventHandler? Changed;
+}
+
 // ---- The practice form in the welcome tour ----
 
 public interface IPracticeEngine
