@@ -22,6 +22,7 @@ internal partial class FlyoutWindow
     private ScreenRect _anchor;
     private TaskbarPosition? _taskbar;
     private long _hiddenAt;
+    private bool _shuttingDown;
 
     public FlyoutWindow(FlyoutViewModel viewModel)
     {
@@ -34,6 +35,15 @@ internal partial class FlyoutWindow
         PreviewKeyDown += OnPreviewKeyDown;
         SizeChanged += (_, _) => Reposition();
         DpiChanged += (_, _) => Reposition();
+        Closing += OnClosing;
+    }
+
+    // Closes the window for good, when the app exits. Anything else (Alt+F4) only hides it: a closed WPF window can
+    // never be shown again.
+    public void Shutdown()
+    {
+        _shuttingDown = true;
+        Close();
     }
 
     private IntPtr Handle => new WindowInteropHelper(this).EnsureHandle();
@@ -121,6 +131,13 @@ internal partial class FlyoutWindow
         };
         EnterOffset.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(dx, 0, duration) { EasingFunction = ease });
         EnterOffset.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(dy, 0, duration) { EasingFunction = ease });
+    }
+
+    private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
+    {
+        if (_shuttingDown) return;
+        e.Cancel = true;
+        Dismiss();
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)

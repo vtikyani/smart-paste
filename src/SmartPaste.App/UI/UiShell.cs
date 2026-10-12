@@ -79,7 +79,7 @@ internal sealed class UiShell : IDisposable
         _tray.FlyoutRequested -= OnFlyoutRequested;
         _tray.Dispose();
         _feedback.Dispose();
-        _flyout.Close();
+        _flyout.Shutdown();
         _flyoutModel.Dispose();
         _theme.Dispose();
         _signals.Dispose();
