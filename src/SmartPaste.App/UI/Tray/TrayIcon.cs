@@ -90,6 +90,7 @@ internal sealed class TrayIcon : IDisposable
         _wasArmed = _state.Armed is not null;
 
         _state.PropertyChanged += OnStateChanged;
+        _controller.SaveFailed += OnSaveFailed;
         _signals.DisplayChanged += OnSystemChanged;
         _signals.AppearanceChanged += OnSystemChanged;
         _tooltipClock.Start();
@@ -251,6 +252,25 @@ internal sealed class TrayIcon : IDisposable
         }
     }
 
+    // A change from the tray menu, the flyout, the on/off shortcut, or a pause running out couldn't be written to
+    // disk. It works anyway; this says it may not last. There is no window to say it in, so it is a notification.
+    private void OnSaveFailed(object? sender, EventArgs e)
+    {
+        if (_taskbarIcon is not { IsCreated: true } icon) return;
+        try
+        {
+            icon.ShowNotification(
+                title: "Smart Paste couldn't save its settings",
+                message: "Your change works for now, but it may be lost when Smart Paste closes. Check that your disk isn't full.",
+                icon: NotificationIcon.Warning,
+                sound: false);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Log.Error("tray_notification_error", ex);
+        }
+    }
+
     private static BitmapSource RenderLogo(int size)
     {
         var visual = new DrawingVisual();
@@ -267,22 +287,22 @@ internal sealed class TrayIcon : IDisposable
         var now = _clock.GetLocalNow();
         if (_state.IsEnabled)
         {
-            menu.Items.Add(Item("Turn off", SymbolRegular.Power24, () => _controller.SetEnabled(false)));
+            menu.Items.Add(Item("Turn off", SymbolRegular.Power24, () => Change(c => c.SetEnabled(false))));
             if (_state.PausedUntil is { } until && until > now)
             {
-                menu.Items.Add(Item("Resume", SymbolRegular.Play24, _controller.Resume));
+                menu.Items.Add(Item("Resume", SymbolRegular.Play24, () => Change(c => c.Resume())));
             }
             else
             {
                 var pause = Item("Pause", SymbolRegular.Pause24, null);
                 foreach (var option in PauseOption.All)
-                    pause.Items.Add(Item(option.Label, null, () => _controller.Pause(option.Length(_clock.GetLocalNow()))));
+                    pause.Items.Add(Item(option.Label, null, () => Change(c => c.Pause(option.Length(_clock.GetLocalNow())))));
                 menu.Items.Add(pause);
             }
         }
         else
         {
-            menu.Items.Add(Item("Turn on", SymbolRegular.Power24, () => _controller.SetEnabled(true)));
+            menu.Items.Add(Item("Turn on", SymbolRegular.Power24, () => Change(c => c.SetEnabled(true))));
         }
         if (_state.Armed is not null)
             menu.Items.Add(Item("Clear copied block", SymbolRegular.Broom24, _controller.ClearProfile));
@@ -290,6 +310,8 @@ internal sealed class TrayIcon : IDisposable
         menu.Items.Add(Item("Settings…", SymbolRegular.Settings24, () => _navigator.ShowSettings()));
         menu.Items.Add(Item("Exit", SymbolRegular.ArrowExit20, _controller.Exit));
     }
+
+    private void Change(Action<AppController> change) => _controller.TryChange(change, "tray");
 
     private static MenuItem Item(string header, SymbolRegular? symbol, Action? action)
     {
@@ -305,6 +327,7 @@ internal sealed class TrayIcon : IDisposable
         _tooltipClock.Stop();
         _createRetry.Stop();
         _state.PropertyChanged -= OnStateChanged;
+        _controller.SaveFailed -= OnSaveFailed;
         _signals.DisplayChanged -= OnSystemChanged;
         _signals.AppearanceChanged -= OnSystemChanged;
         _taskbarIcon?.Dispose();

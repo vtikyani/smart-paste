@@ -1,3 +1,4 @@
+using System.Runtime.ExceptionServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -34,14 +35,18 @@ internal sealed class SettingsStore
         get { lock (_gate) return _current; }
     }
 
-    // Raised after every saved change, on the thread that called Update. Arguments: (previous, current).
+    // Raised after every change, on the thread that called Update. Arguments: (previous, current). Raised even when
+    // the change could not be written to disk: it is in effect anyway, so everything that follows the settings (the
+    // keyboard hook, the exclusions, the tray) must hear about it.
     public event Action<AppSettings, AppSettings>? Changed;
 
-    // Applies a change and saves it. Returns the new settings. A failed save keeps the change in memory, logs
-    // it, and rethrows so the caller can tell the user.
+    // Applies a change and saves it. Returns the new settings. When the save fails, the change still takes effect
+    // and Changed is still raised; then the error (already logged) is rethrown so the caller can tell the user that
+    // the change may not last. The next successful save writes it.
     public AppSettings Update(Func<AppSettings, AppSettings> change)
     {
         AppSettings previous, next;
+        ExceptionDispatchInfo? saveError = null;
         lock (_gate)
         {
             previous = _current;
@@ -50,9 +55,17 @@ internal sealed class SettingsStore
             var json = JsonSerializer.Serialize(next, Json);
             if (json == JsonSerializer.Serialize(previous, Json)) return previous;
             _current = next;
-            Save(json);
+            try
+            {
+                Save(json);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                saveError = ExceptionDispatchInfo.Capture(ex);
+            }
         }
         Changed?.Invoke(previous, next);
+        saveError?.Throw();
         return next;
     }
 

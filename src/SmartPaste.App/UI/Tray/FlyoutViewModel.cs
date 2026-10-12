@@ -35,7 +35,7 @@ internal sealed partial class FlyoutViewModel : ObservableObject, IDisposable
         _clock = clock;
         _dispatcher = Dispatcher.CurrentDispatcher;
         _ticker = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => Tick(), _dispatcher) { IsEnabled = false };
-        PauseOptions = PauseOption.All.Select(o => new PauseChoice(o.Label, new RelayCommand(() => _controller.Pause(o.Length(_clock.GetLocalNow()))))).ToArray();
+        PauseOptions = PauseOption.All.Select(o => new PauseChoice(o.Label, new RelayCommand(() => Change(c => c.Pause(o.Length(_clock.GetLocalNow())))))).ToArray();
 
         _state.PropertyChanged += OnStateChanged;
         _state.Recent.CollectionChanged += OnRecentChanged;
@@ -109,10 +109,10 @@ internal sealed partial class FlyoutViewModel : ObservableObject, IDisposable
     public void Closed() => _ticker.Stop();
 
     [RelayCommand]
-    private void TurnOn() => _controller.SetEnabled(true);
+    private void TurnOn() => Change(c => c.SetEnabled(true));
 
     [RelayCommand]
-    private void Resume() => _controller.Resume();
+    private void Resume() => Change(c => c.Resume());
 
     [RelayCommand]
     private void Clear() => _controller.ClearProfile();
@@ -137,8 +137,11 @@ internal sealed partial class FlyoutViewModel : ObservableObject, IDisposable
 
     partial void OnIsOnChanged(bool value)
     {
-        if (!_syncing) _controller.SetEnabled(value);
+        if (!_syncing) Change(c => c.SetEnabled(value));
     }
+
+    // The flyout has nowhere to show a failed save; the tray says it with a notification.
+    private void Change(Action<AppController> change) => _controller.TryChange(change, "flyout");
 
     partial void OnRevealValuesChanged(bool value) => Armed?.SetReveal(value);
 

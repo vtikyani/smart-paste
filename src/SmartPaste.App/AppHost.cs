@@ -148,7 +148,8 @@ internal sealed class AppHost : IDisposable
     {
         if (name != HotkeyNames.Toggle) return;
         var on = Settings.Current.IsActiveAt(DateTimeOffset.Now);
-        Controller.SetEnabled(!on);
+        // A failed save still switches; the tray says the change may not last.
+        Controller.TryChange(c => c.SetEnabled(!on), "toggle_shortcut");
         Log.Event("toggle_shortcut", ("mode", on ? "off" : "on"));
     }
 
