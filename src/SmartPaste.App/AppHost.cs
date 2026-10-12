@@ -7,6 +7,7 @@ using SmartPaste.App.Infrastructure;
 using SmartPaste.App.Services;
 using SmartPaste.App.Shell;
 using SmartPaste.App.UI;
+using SmartPaste.App.UI.Controls;
 using SmartPaste.App.UI.Navigation;
 using SmartPaste.Core;
 
@@ -25,6 +26,7 @@ internal sealed class AppHost : IDisposable
     private readonly ClipboardPaster _paster;
     private readonly KeyboardHook _hook;
     private readonly HotkeyManager _hotkeys;
+    private readonly ShortcutSync _shortcuts;
     private readonly FocusInspector _focus;
     private readonly InterceptGate _gate;
     private readonly WindowsOcr _ocr;
@@ -56,6 +58,7 @@ internal sealed class AppHost : IDisposable
         _paster = new ClipboardPaster(_watcher);
         _hook = new KeyboardHook(_dispatcher);
         _hotkeys = new HotkeyManager();
+        _shortcuts = new ShortcutSync((name, hotkey) => _hotkeys.Set(name, hotkey));
         _focus = new FocusInspector(_dispatcher);
         _gate = new InterceptGate();
         _ocr = new WindowsOcr();
@@ -90,6 +93,7 @@ internal sealed class AppHost : IDisposable
         Controller.ExitRequested += (_, _) => _application.Shutdown();
         Settings.Changed += OnSettingsChanged;
         _hotkeys.Pressed += OnHotkey;
+        HotkeyBox.RecordingChanged += OnRecordingChanged;
         _instance.OnActivationRequested(() => _dispatcher.BeginInvoke(() => _navigator.ShowSettings()));
 
         _ui.Start();
@@ -113,10 +117,13 @@ internal sealed class AppHost : IDisposable
         _gate.UpdateExcludedApps(settings.ExcludedApps);
         _watcher.ReadScreenshots = settings.ReadScreenshots;
 
+        // Compared with what is running, not with the previous settings: when a pause runs out, the previous settings
+        // evaluated now say "active" too, yet the hook and the picker shortcut are still off.
         var active = settings.IsActiveAt(DateTimeOffset.Now);
-        if (active != _active)
+        var activeChanged = active != _active;
+        _active = active;
+        if (activeChanged)
         {
-            _active = active;
             if (active)
             {
                 _watcher.Start();
@@ -132,16 +139,18 @@ internal sealed class AppHost : IDisposable
             Log.Event("activity", ("mode", active ? "on" : settings.Enabled ? "paused" : "off"));
         }
 
-        // The picker shortcut only while Smart Paste is on, so it never takes a key combination while it is off;
-        // the on/off shortcut always, so Smart Paste can be turned back on with it.
-        var picker = active ? settings.PickerHotkey : null;
-        if (previous is null || previous.PickerHotkey != settings.PickerHotkey || previous.IsActiveAt(DateTimeOffset.Now) != active)
-            _hotkeys.Set(HotkeyNames.Picker, picker);
-        if (previous is null || previous.ToggleHotkey != settings.ToggleHotkey)
-            _hotkeys.Set(HotkeyNames.Toggle, settings.ToggleHotkey);
+        _shortcuts.Apply(settings, active, HotkeyBox.IsAnyRecording);
 
         if (previous is not null && previous.StartAtLogin != settings.StartAtLogin) ApplyStartAtLogin(settings.StartAtLogin);
         _prefetch.Refresh();
+    }
+
+    // A shortcut recorder started or stopped listening (UI thread): both shortcuts step aside while it listens, so
+    // pressing one that is registered records it instead of running it, and come back from the settings after.
+    private void OnRecordingChanged(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+        _shortcuts.Apply(Settings.Current, _active == true, HotkeyBox.IsAnyRecording);
     }
 
     private void OnHotkey(string name)
@@ -198,6 +207,8 @@ internal sealed class AppHost : IDisposable
         _disposed = true;
         Settings.Changed -= OnSettingsChanged;
         _hotkeys.Pressed -= OnHotkey;
+        // A static event: left subscribed, it would keep this host alive and call into it after exit.
+        HotkeyBox.RecordingChanged -= OnRecordingChanged;
         _pastes.Dispose();
         _prefetch.Dispose();
         _ui.Dispose();
