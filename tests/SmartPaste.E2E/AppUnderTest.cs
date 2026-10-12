@@ -49,13 +49,20 @@ internal sealed class AppUnderTest : IDisposable
     {
         try
         {
+            // The normal way out first (--exit), so the app puts the clipboard back and releases held keys; killing is
+            // only the fallback.
             if (!_process.HasExited)
             {
-                _process.Kill(entireProcessTree: true);
+                var exit = new ProcessStartInfo(_process.StartInfo.FileName, "--exit") { UseShellExecute = false };
+                foreach (var (name, value) in _process.StartInfo.Environment)
+                    exit.Environment[name] = value;
+                using (var stopper = Process.Start(exit)) stopper?.WaitForExit(15000);
+                if (!_process.WaitForExit(5000)) _process.Kill(entireProcessTree: true);
                 _process.WaitForExit(5000);
             }
         }
         catch (InvalidOperationException) { }
+        catch (System.ComponentModel.Win32Exception) { }
         _process.Dispose();
         try { Directory.Delete(DataDirectory, recursive: true); }
         catch (IOException) { }

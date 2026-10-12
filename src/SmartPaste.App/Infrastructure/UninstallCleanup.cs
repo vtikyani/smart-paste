@@ -64,6 +64,7 @@ internal static class UninstallCleanup
     private static void TryRun(Action step)
     {
         try { step(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception) { }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.ComponentModel.Win32Exception
+                                       or System.Security.SecurityException) { }
     }
 }

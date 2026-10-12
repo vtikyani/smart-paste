@@ -29,7 +29,8 @@ public enum PickOutcome
 {
     // The user chose a value.
     Chosen,
-    // Escape or "Paste original": paste the clipboard as it is.
+    // Escape or "Paste original" in the Ctrl+V picker: paste the clipboard as it is. (The shortcut's picker never
+    // returns this: there, Escape only closes.)
     PasteOriginal,
     // Clicked elsewhere, typed something else, or timed out: paste nothing.
     Dismissed
