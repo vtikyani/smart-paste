@@ -121,15 +121,6 @@ internal static partial class LabelLines
         return key is null ? null : new Mapping(key, entity);
     }
 
-    // How many different fields the block labels ("Name:", "Email:", "City:"...).
-    public static int CountRecognized(string text)
-    {
-        var keys = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var line in Find(SplitLines(text)))
-            if (Map(line.Label) is { } mapping) keys.Add(mapping.Key);
-        return keys.Count;
-    }
-
     private static string? Lookup(string label) =>
         LabelCache.TryGetBuiltIn(label, out var key) ? key : KeywordRules.Match(label);
 

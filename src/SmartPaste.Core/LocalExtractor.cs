@@ -131,7 +131,7 @@ public static partial class LocalExtractor
     private static void AddPlace(Dictionary<string, string> fields, AddressPatterns.CityStateZip place)
     {
         fields.TryAdd(FieldKeys.City, place.City);
-        fields.TryAdd(FieldKeys.State, place.State);
+        if (place.State is not null) fields.TryAdd(FieldKeys.State, place.State);
         fields.TryAdd(FieldKeys.Zip, place.Zip);
     }
 
