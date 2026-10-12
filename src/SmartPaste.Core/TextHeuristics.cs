@@ -14,7 +14,6 @@ public static class TextHeuristics
     private static readonly Regex Phone = new(@"(?<!\d)(?:\+\d[\d\s().-]{7,}\d|(?:\+?1[\s.-]?)?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})(?!\d)", Options, RegexTimeout);
     private static readonly Regex UsZip = new(@"\b\d{5}(?:-\d{4})?\b", Options, RegexTimeout);
     private static readonly Regex CanadianZip = new(@"\b[A-Z]\d[A-Z] ?\d[A-Z]\d\b", Options, RegexTimeout);
-    private static readonly Regex Street = new(@"\b\d+\s+(?:[\p{L}0-9.'#-]+\s+){1,8}(?:St|Street|Ave|Avenue|Rd|Road|Blvd|Dr|Drive|Ln|Lane|Ct|Way|Pl|Pkwy|Hwy|Ter|Cir)\b", Options, RegexTimeout);
     private static readonly Regex Url = new(@"\b(?:https?://|www\.|linkedin\.com/)[^\s,;]+", Options, RegexTimeout);
     private static readonly Regex LinkedinUrl = new(@"\b(?:https?://)?(?:www\.)?linkedin\.com/[^\s,;]+", Options, RegexTimeout);
     private static readonly Regex Date = new(@"\b(?:\d{1,2}/\d{1,2}/\d{2,4}|\d{4}-\d{2}-\d{2}|(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4})\b", Options, RegexTimeout);
@@ -36,6 +35,7 @@ public static class TextHeuristics
             First(LinkedinUrl, text)?.TrimEnd('.', ')'));
     }
 
+    // How many kinds of contact details the text holds (email, phone, street, postal code, link, date).
     public static int CountFieldTypes(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -43,15 +43,30 @@ public static class TextHeuristics
         var count = 0;
         if (fast.Email is not null) count++;
         if (fast.Phone is not null) count++;
-        if (fast.Zip is not null) count++;
-        if (Street.IsMatch(text)) count++;
+        var street = AddressPatterns.FindStreet(text) is not null;
+        if (street) count++;
+        // A lone five-digit number (an order number) is not a postal code; one after a state, or near a street, is.
+        if (fast.Zip is not null && (street || AddressPatterns.FindCityStateZip(text) is not null)) count++;
         if (fast.Website is not null) count++;
         if (Date.IsMatch(text)) count++;
         return count;
     }
 
-    public static bool LooksMultiField(string text) =>
-        !string.IsNullOrWhiteSpace(text) && text.Length <= MaxChars && CountFieldTypes(text) >= 2;
+    // True for a block of someone's details: at least two kinds of contact details, or at least two recognized
+    // "Label: value" lines. Ordinary prose with one date or one phone number is not.
+    public static bool LooksMultiField(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length > MaxChars) return false;
+        try
+        {
+            return CountFieldTypes(text) >= 2 || LabelLines.CountRecognized(text) >= 2;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            // Text this convoluted is not a block of contact details.
+            return false;
+        }
+    }
 
     private static string? First(Regex regex, string text)
     {

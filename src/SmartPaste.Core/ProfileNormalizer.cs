@@ -9,7 +9,7 @@ public static class ProfileNormalizer
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (rawKey, rawValue) in e.Fields)
         {
-            var key = Regex.Replace(rawKey.Trim().ToLowerInvariant(), "[\\s-]+", "_");
+            var key = NormalizeKey(rawKey);
             var value = rawValue.Trim();
             if (key.Length > 0 && value.Length > 0)
                 fields[key] = value;
@@ -46,4 +46,7 @@ public static class ProfileNormalizer
 
         return new Entity(e.Label.Trim(), fields);
     }
+
+    // "First Name" or "first-name" -> "first_name".
+    public static string NormalizeKey(string key) => Regex.Replace(key.Trim().ToLowerInvariant(), "[\\s-]+", "_");
 }
