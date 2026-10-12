@@ -55,8 +55,14 @@ public sealed record Decision(
 // built-in list, keyword rules) decides only when Jev is unavailable.
 public sealed class FieldDecider
 {
-    // TypeSafe's guidance: act automatically above 0.8; below that, let the user choose.
+    // TypeSafe's guidance: act automatically only above 0.8; otherwise let the user choose.
     public const double ConfidenceFloor = 0.8;
+
+    // Jev's confidence measures how concentrated its answer is, not how likely the chosen value is: 0.52 for the full
+    // name and 0.48 for the first name can still be "confident". The chosen value must also be at least this
+    // probable to be pasted without asking.
+    public const double ChoiceProbabilityFloor = 0.7;
+
     public const int PickerSize = 3;
 
     // Deadline for Jev at paste time, shared by all routes. Ask-ahead callers pass a longer one.
@@ -160,19 +166,21 @@ public sealed class FieldDecider
 
     private Decision FromJev(JevChoice choice, JevQuestion question, FieldContext field, Profile profile)
     {
-        if (choice.Confidence >= ConfidenceFloor)
+        // Jev finds "none" most likely: a normal paste, however unsure it is about the rest. Offering the user's values
+        // here would invite pasting them where they do not belong (an emergency contact's email).
+        if (NoneIsMostLikely(choice))
+            return Plain(DecisionReasons.NoneSelected) with { Source = "jev", DecidedBy = DecisionSource.Jev, Confidence = choice.Confidence };
+
+        if (choice.Confidence > ConfidenceFloor && Probability(choice, choice.Choice) >= ChoiceProbabilityFloor &&
+            question.Option(choice.Choice)?.Candidate is { } picked)
         {
-            if (choice.IsNone) return Plain(DecisionReasons.NoneSelected) with { Source = "jev", DecidedBy = DecisionSource.Jev, Confidence = choice.Confidence };
-            if (question.Option(choice.Choice)?.Candidate is { } picked)
+            var value = Formatted(picked, field);
+            Learn(field, value.Key, AllValues(profile).Append(value.Value));
+            return new Decision(DecisionKind.Value, value.Key, value.Value, [value], "jev", DecisionReasons.Matched)
             {
-                var value = Formatted(picked, field);
-                Learn(field, value.Key, AllValues(profile).Append(value.Value));
-                return new Decision(DecisionKind.Value, value.Key, value.Value, [value], "jev", DecisionReasons.Matched)
-                {
-                    DecidedBy = DecisionSource.Jev,
-                    Confidence = choice.Confidence
-                };
-            }
+                DecidedBy = DecisionSource.Jev,
+                Confidence = choice.Confidence
+            };
         }
 
         // Unsure: Jev's most probable values (never "none") for the user to choose from.
@@ -194,6 +202,18 @@ public sealed class FieldDecider
             Confidence = choice.Confidence
         };
     }
+
+    // "none" has the highest probability. A tie goes to Jev's own choice; without probabilities, its choice decides.
+    private static bool NoneIsMostLikely(JevChoice choice)
+    {
+        if (!choice.Probabilities.TryGetValue(JevQuestion.NoneOption, out var none)) return choice.IsNone;
+        var best = choice.Probabilities.Where(p => p.Key != JevQuestion.NoneOption).Select(p => p.Value).DefaultIfEmpty(0).Max();
+        return none > best || (none == best && choice.IsNone);
+    }
+
+    // The probability Jev gave an option. An answer without one is never pasted unasked: its confidence alone cannot
+    // say how likely the chosen value is.
+    private static double Probability(JevChoice choice, string option) => choice.Probabilities.GetValueOrDefault(option);
 
     // The offline fallback: learned labels, then the built-in list, then keyword rules.
     private Decision DecideLocally(FieldContext field, Profile profile)

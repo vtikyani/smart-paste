@@ -47,7 +47,7 @@ public class FieldDeciderTests
     [Fact]
     public async Task JevDecidesEvenWhenTheLocalListKnowsTheLabel()
     {
-        var jev = new FakeJev(_ => Pick(FieldKeys.Email, 0.9));
+        var jev = new FakeJev(_ => Pick(FieldKeys.Email, 0.9, (FieldKeys.Email, 0.92)));
         var decision = await new FieldDecider(new LabelCache(null), jev).DecideAsync(Field("First name"), Profile(Person), CancellationToken.None);
         Assert.Equal(1, jev.Calls);
         Assert.Equal(DecisionSource.Jev, decision.DecidedBy);
@@ -71,7 +71,7 @@ public class FieldDeciderTests
     [Fact]
     public async Task JevPicksBetweenBillingAndShipping()
     {
-        var jev = new FakeJev(_ => Pick("street__shipping_address", 0.92));
+        var jev = new FakeJev(_ => Pick("street__shipping_address", 0.92, ("street__shipping_address", 0.95), ("street__billing_address", 0.05)));
         var decision = await new FieldDecider(LabelCache.Empty(), jev).DecideAsync(Field("Street"), Addresses, CancellationToken.None);
         Assert.Equal("2 Oak Ave", decision.Value);
         Assert.Equal(new Candidate(FieldKeys.Street, "shipping address", "2 Oak Ave"), Assert.Single(decision.Candidates));
@@ -104,12 +104,77 @@ public class FieldDeciderTests
     }
 
     [Fact]
-    public async Task UnsureWithOnlyNoneIsAPlainPaste()
+    public async Task NoneMostLikelyIsAPlainPasteEvenWhenUnsure()
     {
         var decision = await new FieldDecider(LabelCache.Empty(), new FakeJev(_ => Pick("none", 0.3, ("none", 0.6))))
             .DecideAsync(Field("Odd field"), Profile(Person), CancellationToken.None);
         Assert.Equal(DecisionKind.PlainPaste, decision.Kind);
+        Assert.Equal(DecisionReasons.NoneSelected, decision.Reason);
+        Assert.Equal(DecisionSource.Jev, decision.DecidedBy);
+    }
+
+    // ---- Confidence is concentration, not the chosen value's probability ----
+
+    [Fact]
+    public async Task ConfidentButSplitBetweenTwoValuesShowsThePicker()
+    {
+        // Confidence 0.85 yet only 0.52 for the full name: "Jordan Rivera" must not land in "First name" unasked.
+        var profile = Profile(new Entity("person", new Dictionary<string, string>
+        {
+            [FieldKeys.FirstName] = "Jordan", [FieldKeys.FullName] = "Jordan Rivera", [FieldKeys.Email] = "v@example.com"
+        }));
+        var cache = LabelCache.Empty();
+        var jev = new FakeJev(_ => Pick(FieldKeys.FullName, 0.85, (FieldKeys.FullName, 0.52), (FieldKeys.FirstName, 0.48), ("none", 0)));
+        var decision = await new FieldDecider(cache, jev).DecideAsync(Field("First name"), profile, CancellationToken.None);
+
+        Assert.Equal(DecisionKind.Picker, decision.Kind);
         Assert.Equal(DecisionReasons.LowConfidence, decision.Reason);
+        Assert.Equal(["Jordan Rivera", "Jordan"], decision.Candidates.Select(c => c.Value));
+        Assert.Empty(cache.Learned);
+    }
+
+    [Theory]
+    // Above 0.8 and at least 0.7 for the chosen value: pasted.
+    [InlineData(0.81, 0.7, DecisionKind.Value)]
+    [InlineData(0.95, 0.97, DecisionKind.Value)]
+    // Exactly 0.8 is not above it.
+    [InlineData(0.8, 0.95, DecisionKind.Picker)]
+    [InlineData(0.81, 0.69, DecisionKind.Picker)]
+    [InlineData(0.5, 0.9, DecisionKind.Picker)]
+    public async Task PastedOnlyAboveTheConfidenceFloorWithAProbableChoice(double confidence, double probability, DecisionKind expected)
+    {
+        var jev = new FakeJev(_ => Pick(FieldKeys.Zip, confidence, (FieldKeys.Zip, probability), (FieldKeys.Email, 1 - probability)));
+        var decision = await new FieldDecider(LabelCache.Empty(), jev).DecideAsync(Field("Postal"), Profile(Person), CancellationToken.None);
+        Assert.Equal(expected, decision.Kind);
+        Assert.Equal(FieldKeys.Zip, decision.Candidates[0].Key);
+        Assert.Equal(0.8, FieldDecider.ConfidenceFloor);
+        Assert.Equal(0.7, FieldDecider.ChoiceProbabilityFloor);
+    }
+
+    [Fact]
+    public async Task AnswerWithoutProbabilitiesIsNeverPastedUnasked()
+    {
+        var decision = await new FieldDecider(LabelCache.Empty(), new FakeJev(_ => Pick(FieldKeys.Zip, 0.97)))
+            .DecideAsync(Field("Postal"), Profile(Person), CancellationToken.None);
+        Assert.Equal(DecisionKind.Picker, decision.Kind);
+        Assert.Equal("07081", Assert.Single(decision.Candidates).Value);
+    }
+
+    [Fact]
+    public async Task NoneMostLikelyWithLowConfidenceNeverOffersTheUsersValues()
+    {
+        // Jev's choice is the email, but "none" is more probable: an emergency contact's email is not the user's.
+        var jev = new FakeJev(_ => Pick(FieldKeys.Email, 0.4, ("none", 0.45), (FieldKeys.Email, 0.4), (FieldKeys.Zip, 0.15)));
+        var decision = await new FieldDecider(LabelCache.Empty(), jev).DecideAsync(Field("Emergency contact email"), Profile(Person), CancellationToken.None);
+        Assert.Equal(DecisionKind.PlainPaste, decision.Kind);
+        Assert.Equal(DecisionReasons.NoneSelected, decision.Reason);
+        Assert.Empty(decision.Candidates);
+        Assert.Equal(0.4, decision.Confidence);
+
+        // A tie with "none" goes to Jev's own choice.
+        var tie = await new FieldDecider(LabelCache.Empty(), new FakeJev(_ => Pick(FieldKeys.Email, 0.3, ("none", 0.45), (FieldKeys.Email, 0.45))))
+            .DecideAsync(Field("Email"), Profile(Person), CancellationToken.None);
+        Assert.Equal(DecisionKind.Picker, tie.Kind);
     }
 
     [Fact]
@@ -424,7 +489,7 @@ public class FieldDeciderTests
     public async Task IdOnlyFieldsTeachNothing()
     {
         var cache = LabelCache.Empty();
-        var jev = new FakeJev(_ => Pick(FieldKeys.Zip, 0.99));
+        var jev = new FakeJev(_ => Pick(FieldKeys.Zip, 0.99, (FieldKeys.Zip, 0.99)));
         var field = new FieldContext(null, null, "shippingPostal", null, "Edit", false, []);
         var decision = await new FieldDecider(cache, jev).DecideAsync(field, Profile(Person), CancellationToken.None);
         Assert.Equal("07081", decision.Value);
