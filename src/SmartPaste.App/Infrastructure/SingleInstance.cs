@@ -25,8 +25,21 @@ internal sealed class SingleInstance : IDisposable
         return new SingleInstance(mutex, activate, created);
     }
 
-    // Second copy: ask the running one to show itself.
-    public void SignalPrimary() => _activate.Set();
+    // Second copy: ask the running one to show itself. This copy was just started by the user, so it may take the
+    // foreground; it passes that right on, or Windows would keep the running copy's window behind the others.
+    public void SignalPrimary()
+    {
+        NativeMethods.AllowSetForegroundWindow(NativeMethods.AsfwAny);
+        _activate.Set();
+    }
+
+    private static class NativeMethods
+    {
+        public const uint AsfwAny = unchecked((uint)-1);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", SetLastError = true)]
+        public static extern bool AllowSetForegroundWindow(uint processId);
+    }
 
     // First copy: run the callback (on a thread-pool thread) each time another copy starts.
     public void OnActivationRequested(Action callback)
