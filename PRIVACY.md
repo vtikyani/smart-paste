@@ -31,10 +31,11 @@ Smart Paste turns a copied block into fields like first name, street, and ZIP co
   A "Company" line counts only next to one of these. Links and dates never count. Lines labeled as secrets, or as
   someone else's details (like an emergency contact), are not counted. The text can be at most 20,000 characters.
 - **What is sent:** the copied text, with its secrets taken out first:
-  - Lines labeled as secrets are removed. That covers passwords and PINs; card numbers, security codes, and expiry
-    dates; bank account, routing, IBAN, and SWIFT numbers; social security, tax, ID, passport, and driver's license
-    numbers; one-time codes; security answers; and API keys. A label on a line of its own ("Account number") takes
-    the line below it along.
+  - Labeled secrets are removed with their values, wherever they are on a line ("Email: … Password: …"). That covers
+    passwords and PINs; card numbers, security codes, and expiry dates; bank account, routing, IBAN, and SWIFT
+    numbers; social security, tax, ID, passport, and driver's license numbers; one-time codes; security answers; and
+    API keys. A label on a line of its own ("Account number", "Temporary password:") takes the line below it along,
+    and in a copied table, the column under a secret's label goes from every row.
   - Card numbers, US social security numbers (like 123-45-6789), and IBANs are replaced with "[removed]" wherever
     they appear, labeled or not.
   - Everything else is sent as you copied it. Bank account and routing numbers have no fixed shape, so they are

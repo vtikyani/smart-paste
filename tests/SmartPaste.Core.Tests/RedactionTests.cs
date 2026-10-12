@@ -72,6 +72,55 @@ public class RedactionTests
     public void ALoneLabelLeavesALabeledLineBelowIt() =>
         Assert.Equal("\nEmail: v@example.com", Redaction.Redact("Password\nEmail: v@example.com"));
 
+    // A secret goes wherever it is on a line, not only at its start or after " | ".
+    [Theory]
+    [InlineData("Email: jordan@acme.com Password: Welcome123!", "Email: jordan@acme.com")]
+    [InlineData("Email: jordan@acme.com Password:Welcome123!", "Email: jordan@acme.com")]
+    [InlineData("Username: jlee  Password: hunter2", "Username: jlee")]
+    [InlineData("Login: jlee / Password: hunter2", "Login: jlee")]
+    [InlineData("Name\tJordan Lee\tPassword\thunter2", "Name\tJordan Lee")]
+    [InlineData("Name: Jordan Lee   Password: hunter2", "Name: Jordan Lee")]
+    [InlineData("Company: Acme Corp   Tax ID: 12-3456789", "Company: Acme Corp")]
+    [InlineData("Phone: 201-555-0100, Card number: 4111 1111 1111 1111", "Phone: 201-555-0100")]
+    public void ASecretLaterOnALineIsRemoved(string line, string kept) =>
+        Assert.Equal("Jordan Lee\n" + kept, Redaction.Redact("Jordan Lee\n" + line));
+
+    // Words that only look like labels stay: links, times, and a colon inside a value.
+    [Theory]
+    [InlineData("Website: https://jordanlee.dev")]
+    [InlineData("Best time: 10:30 AM")]
+    [InlineData("Title: VP: Engineering")]
+    [InlineData("Jordan Lee Phone: 201-555-0100")]
+    public void ColonsThatStartNoLabelChangeNothing(string line) => Assert.Equal(line, Redaction.Redact(line));
+
+    // The value under a lone secret label goes, whatever words come before the secret.
+    [Theory]
+    [InlineData("Temporary password:\nXk9#mq2!")]
+    [InlineData("Email password:\nXk9#mq2!")]
+    [InlineData("WiFi password:\nXk9#mq2!")]
+    [InlineData("Federal Tax ID:\n12-3456789")]
+    [InlineData("Beneficiary account:\n000123456789")]
+    [InlineData("Wire routing number\n021000021")]
+    public void TheValueUnderAnyLoneSecretLabelIsRemoved(string pair) =>
+        Assert.Equal("Jordan Lee\nPhone: 201-555-0100\n\n\nv@example.com",
+            Redaction.Redact("Jordan Lee\nPhone: 201-555-0100\n" + pair + "\nv@example.com"));
+
+    // A copied table's next row is a value even when its first cell looks like a label.
+    [Fact]
+    public void ARowUnderALoneSecretLabelIsItsValue() =>
+        Assert.Equal("\n\nv@example.com", Redaction.Redact("Account number:\nChase\t000123456789\nv@example.com"));
+
+    [Fact]
+    public void ACopiedTableLosesTheColumnsUnderSecretLabels() =>
+        Assert.Equal("Bank\nChase\nWells Fargo\n\nJordan Lee",
+            Redaction.Redact("Bank\tAccount number\tRouting number\nChase\t000123456789\t021000021\n" +
+                             "Wells Fargo\t000987654321\t121000248\n\nJordan Lee"));
+
+    [Fact]
+    public void InALabelAndValueTableOnlyTheSecretRowGoes() =>
+        Assert.Equal("Name\tJordan Lee\n\nEmail\tv@example.com",
+            Redaction.Redact("Name\tJordan Lee\nPassword\tsunshine\nEmail\tv@example.com"));
+
     [Theory]
     [InlineData("Routing 021000021")]
     [InlineData("Acct # 1234-5678")]

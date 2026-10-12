@@ -38,21 +38,42 @@ internal static partial class Redaction
     // of these, so a name such as "Taylor Swift" is never taken for the label "SWIFT".
     private static readonly HashSet<string> LabelWords = BuildLabelWords();
 
-    // The text with secrets removed: lines and " | " parts whose label names a secret, a lone label line ("Account
-    // number") together with the value on the line below it, and card numbers, SSNs, and IBANs anywhere. Everything
-    // else, line breaks included, is left exactly as it was.
+    // Other words a table's column labels are made of, beside the label words: "Notes", "Account type".
+    private static readonly HashSet<string> HeaderWords = new(StringComparer.Ordinal)
+    {
+        "notes", "note", "memo", "type", "status", "amount", "balance", "currency", "description", "nickname", "holder",
+        "branch", "institution", "country", "comments", "comment", "category", "label", "owner", "address", "city",
+        "state", "zip", "phone", "email", "e", "mail", "website", "url", "company", "title", "full", "first", "last",
+        "user", "username", "login", "site", "service", "app", "expires", "issued", "limit", "opened", "since"
+    };
+
+    // The text with secrets removed: the parts of a line whose label names a secret (wherever on the line they are), a
+    // lone label line ("Account number", "Temporary password:") together with the value on the line below it, the
+    // secret cells of a copied table, and card numbers, SSNs, and IBANs anywhere. Everything else, line breaks
+    // included, is left exactly as it was.
     public static string Redact(string text, string mask = Mask)
     {
         ArgumentNullException.ThrowIfNull(text);
         var builder = new StringBuilder(text.Length);
         var valueBelow = false;
+        var table = new TableState();
         foreach (var (line, lineBreak) in SplitKeepingBreaks(text))
         {
             var kept = line;
-            if (!string.IsNullOrWhiteSpace(line))
+            if (string.IsNullOrWhiteSpace(line))
             {
-                // The value under a lone label, unless that line has a label of its own.
-                var isValue = valueBelow && !LabelLines.HasLabel(line);
+                table.End();
+            }
+            else if (table.Redact(line) is { } row)
+            {
+                valueBelow = false;
+                kept = WithoutSecretParts(row);
+            }
+            else
+            {
+                // The value under a lone label, unless that line has a "Label: value" of its own. A table cell does
+                // not count: "Chase<TAB>000123456789" under "Account number" is that number.
+                var isValue = valueBelow && !LabelLines.HasColonLabel(line);
                 valueBelow = false;
                 if (isValue) kept = "";
                 else if (IsBareLabel(line))
@@ -65,6 +86,67 @@ internal static partial class Redaction
             builder.Append(MaskNumbers(kept, mask)).Append(lineBreak);
         }
         return builder.ToString();
+    }
+
+    // Rows of tab-separated cells, as copied from a table. In a row, a cell that names a secret goes, and so does the
+    // cell after it (its value). When the cell after each one is empty or a label itself, the row is the table's
+    // header: in the rows below with the same number of cells, the cells under those labels go too. A blank line or a
+    // line of another shape ends the table.
+    private sealed class TableState
+    {
+        private HashSet<int>? _secretColumns;
+        private int _columnCount;
+
+        public void End() => _secretColumns = null;
+
+        // The row with its secret cells emptied, or null when the line is not such a row.
+        public string? Redact(string line)
+        {
+            var cells = line.Split('\t');
+            if (cells.Length < 2)
+            {
+                End();
+                return null;
+            }
+            var secrets = Enumerable.Range(0, cells.Length).Where(i => IsSecretCell(cells[i])).ToArray();
+            if (secrets.Length > 0)
+            {
+                var header = secrets.All(i => i + 1 >= cells.Length || string.IsNullOrWhiteSpace(cells[i + 1]) || IsLabelCell(cells[i + 1]));
+                _secretColumns = header ? secrets.ToHashSet() : null;
+                _columnCount = cells.Length;
+                foreach (var i in secrets)
+                {
+                    cells[i] = "";
+                    if (i + 1 < cells.Length) cells[i + 1] = "";
+                }
+                return Join(cells);
+            }
+            if (_secretColumns is { } columns && cells.Length == _columnCount)
+            {
+                foreach (var i in columns) cells[i] = "";
+                return Join(cells);
+            }
+            End();
+            return null;
+        }
+
+        private static string Join(string[] cells) => string.Join('\t', cells).TrimEnd('\t', ' ');
+    }
+
+    // A cell that names a secret: "Account number", "Temporary password", "PIN".
+    private static bool IsSecretCell(string cell)
+    {
+        var s = LabelNormalizer.Normalize(cell);
+        return s.Length is > 0 and <= 40 && char.IsLetter(cell.TrimStart()[0]) && s.Split(' ').Length <= 5 && IsSensitiveLabel(s);
+    }
+
+    // A cell that reads as a column's label rather than a value: short, no digits or "@", and made of label words.
+    private static bool IsLabelCell(string cell)
+    {
+        var s = LabelNormalizer.Normalize(cell);
+        if (s.Length is 0 or > 40 || cell.Any(char.IsDigit) || cell.Contains('@')) return false;
+        return s.Split(' ').All(word => LabelWords.Contains(word) || HeaderWords.Contains(word)) ||
+               LabelLines.Map(s) is not null || IsSensitiveLabel(s) || KeywordRules.IsAboutSomeoneElse(s);
     }
 
     // Card numbers, SSNs, and IBANs replaced with the mask; everything else unchanged. Masking one number can leave a
@@ -114,11 +196,16 @@ internal static partial class Redaction
         return CardOrAccount.Any(term => Has(s, term)) && !HolderWords.Any(term => Has(s, term));
     }
 
-    // "Account number", "Security code:", "PIN": a line that is only a secret's label.
+    // "Account number", "Security code:", "Temporary password:": a line that is only a secret's label, so its value is
+    // on the line below. With a colon at the end the words can be anything ("WiFi password:"); without one they must
+    // all be label words, so a name such as "Taylor Swift" is never taken for the label "SWIFT".
     private static bool IsBareLabel(string line)
     {
-        var s = LabelNormalizer.Normalize(line);
-        return s.Length is > 0 and <= 40 && IsLabelWords(s) && IsSensitiveLabel(s);
+        var trimmed = line.Trim();
+        var colon = trimmed.Length > 1 && trimmed[^1] is ':' or '：';
+        var s = LabelNormalizer.Normalize(colon ? trimmed[..^1] : trimmed);
+        if (s.Length is 0 or > 40 || !IsSensitiveLabel(s)) return false;
+        return colon ? s.Split(' ').Length <= 6 : IsLabelWords(s);
     }
 
     private static bool IsLabelWords(string normalized)
@@ -295,7 +382,10 @@ internal static partial class Redaction
             "date", "bank", "banking", "credit", "debit", "checking", "savings", "your", "my", "the", "of", "on", "for",
             "and", "or", "s", "card", "account", "acct", "security", "social", "question", "answer", "verification",
             "authentication", "auth", "one", "time", "2fa", "mfa", "new", "old", "current", "confirm", "primary",
-            "mother", "maiden", "name", "key", "personal", "identification"
+            "mother", "maiden", "name", "key", "personal", "identification",
+            // Qualifiers that come in front of a secret's label: "Wire routing number", "Federal tax ID".
+            "wire", "temporary", "temp", "federal", "email", "wifi", "login", "beneficiary", "online", "member",
+            "customer", "employee", "user", "admin", "router", "network", "default", "master", "app"
         };
         foreach (var term in SecretTerms) words.UnionWith(term.Split(' '));
         return words;

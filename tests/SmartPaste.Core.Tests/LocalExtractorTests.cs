@@ -4,6 +4,27 @@ public class LocalExtractorTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 12, 0, 0, 0, TimeSpan.Zero);
 
+    // A secret later on a line never becomes part of the value before it.
+    [Fact]
+    public void ASecretLaterOnALineNeverJoinsAValue()
+    {
+        var profile = LocalExtractor.Extract(
+            "Name: Jordan Lee   Password: hunter2\nCompany: Acme Corp   Tax ID: 12-3456789\njordan@acme.com", Now);
+        Assert.Equal("Jordan Lee", Value(profile, FieldKeys.FullName));
+        Assert.Equal("Acme Corp", Value(profile, FieldKeys.Company));
+        Assert.DoesNotContain(profile.Entities.SelectMany(e => e.Fields.Values),
+            value => value.Contains("hunter2", StringComparison.Ordinal) || value.Contains("3456789", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SeveralLabelsOnOneLineEachKeepTheirValue()
+    {
+        var profile = LocalExtractor.Extract("Jordan Lee\nCity: Springfield   State: NJ   ZIP: 07081\njordan@acme.com", Now);
+        Assert.Equal("Springfield", Value(profile, FieldKeys.City));
+        Assert.Equal("NJ", Value(profile, FieldKeys.State));
+        Assert.Equal("07081", Value(profile, FieldKeys.Zip));
+    }
+
     private static string? Value(Profile profile, string key, string? entity = null) =>
         profile.ValuesFor(key).Where(v => entity is null || v.Entity.Label == entity).Select(v => v.Value).SingleOrDefault();
 
