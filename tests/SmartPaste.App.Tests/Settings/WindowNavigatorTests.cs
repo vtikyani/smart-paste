@@ -138,6 +138,26 @@ public sealed class WindowNavigatorTests
         }
     });
 
+    // A restart or sign-out while the first-run tour is open is not the user dismissing it: it comes back next time.
+    [Fact]
+    public void ExitingDoesNotMarkTheTourAsSeen() => UiTestHost.Run(async () =>
+    {
+        using var ui = new TestUi();
+        var navigator = new WindowNavigator(ui.Services, window =>
+        {
+            if (!window.IsVisible) UiTestHost.ShowOffScreen(window);
+        });
+        navigator.ShowOnboarding();
+        var tour = navigator.Onboarding;
+        Assert.NotNull(tour);
+
+        tour.CloseForExit();
+        await UiTestHost.Settle();
+
+        Assert.Null(navigator.Onboarding);
+        Assert.False(ui.Settings.Current.OnboardingCompleted);
+    });
+
     [Fact]
     public void RequestsFromOtherThreadsAreHandledOnTheUiThread() => UiTestHost.Run(async () =>
     {

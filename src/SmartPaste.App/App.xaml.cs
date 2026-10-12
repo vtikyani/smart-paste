@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Threading;
 using SmartPaste.App.Infrastructure;
+using SmartPaste.App.UI.Onboarding;
 
 namespace SmartPaste.App;
 
@@ -106,14 +107,16 @@ public partial class App : Application
         }
     }
 
-    // The settings window and the welcome tour, closed as if by hand (so a tour left open counts as seen, as before).
+    // The settings window and the welcome tour. A tour left open is not marked as seen: Smart Paste exiting (a restart,
+    // a sign-out, an update) is not the user dismissing it, so it shows again at the next start.
     private void CloseWindows()
     {
         foreach (var window in Windows.Cast<Window>().ToArray())
         {
             try
             {
-                window.Close();
+                if (window is OnboardingWindow tour) tour.CloseForExit();
+                else window.Close();
             }
             catch (Exception ex)
             {

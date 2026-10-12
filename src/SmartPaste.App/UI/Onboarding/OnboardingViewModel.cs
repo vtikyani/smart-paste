@@ -32,8 +32,8 @@ internal sealed partial class StepDot : ObservableObject
         $"Step {(int)Step + 1} of {OnboardingViewModel.StepCount}" + (IsCurrent ? ", current" : IsDone ? ", done" : "");
 }
 
-// The welcome tour: six short steps, Back / Next / Skip, and what happens when it ends. Finishing or closing it
-// marks the tour as seen, so it doesn't come back on its own.
+// The welcome tour: six short steps, Back / Next / Skip, and what happens when it ends. Finishing, skipping, or closing
+// it by hand marks the tour as seen, so it doesn't come back on its own.
 internal sealed partial class OnboardingViewModel : ObservableObject, IDisposable
 {
     public static readonly int StepCount = Enum.GetValues<OnboardingStep>().Length;

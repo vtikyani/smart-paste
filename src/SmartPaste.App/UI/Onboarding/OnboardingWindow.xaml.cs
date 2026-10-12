@@ -12,7 +12,8 @@ using Wpf.Ui.Controls;
 
 namespace SmartPaste.App.UI.Onboarding;
 
-// The welcome tour window. Steps slide in the direction of travel; closing it any way marks the tour as seen.
+// The welcome tour window. Steps slide in the direction of travel. Closing it by hand marks the tour as seen; Smart
+// Paste exiting (a restart, a sign-out, an update) does not, so the tour comes back at the next start.
 internal partial class OnboardingWindow : FluentWindow
 {
     private static readonly IReadOnlyDictionary<OnboardingStep, string> Titles = new Dictionary<OnboardingStep, string>
@@ -27,6 +28,7 @@ internal partial class OnboardingWindow : FluentWindow
 
     private readonly Dictionary<OnboardingStep, FrameworkElement> _views = [];
     private int _transition;
+    private bool _closingForExit;
 
     public OnboardingWindow(UiServices services, IWindowNavigator navigator)
     {
@@ -39,7 +41,10 @@ internal partial class OnboardingWindow : FluentWindow
         ViewModel.CloseRequested += (_, _) => Close();
         // Enter or Space moves on right away; Tab reaches everything else.
         Loaded += (_, _) => NextButton.Focus();
-        Closing += (_, _) => ViewModel.Complete(finished: false);
+        Closing += (_, _) =>
+        {
+            if (!_closingForExit) ViewModel.Complete(finished: false);
+        };
         Closed += (_, _) =>
         {
             ViewModel.PropertyChanged -= OnViewModelChanged;
@@ -49,6 +54,13 @@ internal partial class OnboardingWindow : FluentWindow
     }
 
     public OnboardingViewModel ViewModel { get; }
+
+    // Closes the tour because Smart Paste is exiting. The user did not dismiss it, so it is not marked as seen.
+    public void CloseForExit()
+    {
+        _closingForExit = true;
+        Close();
+    }
 
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
