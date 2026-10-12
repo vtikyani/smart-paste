@@ -1,20 +1,26 @@
+using System.ComponentModel;
 using System.Reflection;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SmartPaste.App.Infrastructure;
 using SmartPaste.App.Services;
+using SmartPaste.App.UI.Text;
 
 namespace SmartPaste.App.UI.Settings.Pages;
 
-internal enum UpdateStage { Unsupported, Idle, Checking, UpToDate, Available, Downloading, Restarting, Failed }
+// Ready: a new version is on this PC and installs the next time Smart Paste starts, or now with Restart now.
+internal enum UpdateStage { Unsupported, Idle, Checking, UpToDate, Downloading, Ready, Restarting, Failed }
 
 // The About page: version, updates, links, and the welcome tour.
+//
+// Updates work like the automatic check (UpdateScheduler): a new version is downloaded in the background, and the
+// installer applies it the next time Smart Paste starts. AppState.Update is only ever set once it is on this PC.
 internal sealed partial class AboutViewModel : ObservableObject, IDisposable
 {
     private readonly SettingsContext _context;
     private readonly CancellationTokenSource _lifetime = new();
     private bool _loading;
-    private AvailableUpdate? _available;
+    private AvailableUpdate? _ready;
 
     public AboutViewModel(SettingsContext context)
     {
@@ -22,11 +28,12 @@ internal sealed partial class AboutViewModel : ObservableObject, IDisposable
         if (!context.Services.Updates.IsSupported)
             Show(UpdateStage.Unsupported, "This copy wasn't installed with the installer, so it can't update itself.");
         else if (context.Services.State.Update is { } waiting)
-            ShowAvailable(waiting);
+            ShowReady(waiting);
         else
             Show(UpdateStage.Idle, "");
         Load();
         context.Services.Settings.Changed += OnSettingsChanged;
+        context.Services.State.PropertyChanged += OnStateChanged;
     }
 
     public string Version => AppInfo.Version;
@@ -37,13 +44,17 @@ internal sealed partial class AboutViewModel : ObservableObject, IDisposable
     public bool HasRepository => AppInfo.RepositoryUrl.Length > 0;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsChecking), nameof(IsDownloading), nameof(CanCheck), nameof(CanInstall), nameof(CheckText))]
-    [NotifyCanExecuteChangedFor(nameof(CheckCommand), nameof(InstallCommand))]
+    [NotifyPropertyChangedFor(nameof(IsChecking), nameof(IsDownloading), nameof(CanCheck), nameof(CanRestart), nameof(CheckText))]
+    [NotifyCanExecuteChangedFor(nameof(CheckCommand), nameof(RestartCommand))]
     public partial UpdateStage Stage { get; set; }
 
     // What's happening with updates, in one sentence; empty before the first check.
     [ObservableProperty]
     public partial string UpdateMessage { get; set; } = "";
+
+    // What's new in the version that is ready, as plain text; empty when it has no notes.
+    [ObservableProperty]
+    public partial string ReleaseNotes { get; private set; } = "";
 
     [ObservableProperty]
     public partial int DownloadPercent { get; set; }
@@ -57,7 +68,7 @@ internal sealed partial class AboutViewModel : ObservableObject, IDisposable
 
     public bool CanCheck => Stage is UpdateStage.Idle or UpdateStage.UpToDate or UpdateStage.Failed;
 
-    public bool CanInstall => Stage == UpdateStage.Available;
+    public bool CanRestart => Stage == UpdateStage.Ready;
 
     public string CheckText => Stage switch
     {
@@ -78,12 +89,12 @@ internal sealed partial class AboutViewModel : ObservableObject, IDisposable
         try
         {
             var result = await _context.Services.Updates.CheckAsync(_lifetime.Token);
+            // The automatic check delivered a version meanwhile; that one stands.
+            if (Stage != UpdateStage.Checking) return;
             switch (result.Status)
             {
                 case UpdateCheckStatus.Available when result.Update is { } update:
-                    // Share it with the tray, which shows that an update is waiting.
-                    _context.Services.State.Update = update;
-                    ShowAvailable(update);
+                    await DownloadAsync(update);
                     break;
                 case UpdateCheckStatus.UpToDate:
                     Show(UpdateStage.UpToDate, $"You're up to date. Checked at {StatusText.Moment(DateTimeOffset.Now, DateTimeOffset.Now)}.");
@@ -98,27 +109,33 @@ internal sealed partial class AboutViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand(CanExecute = nameof(CanInstall))]
-    private async Task InstallAsync()
+    // A version found here is downloaded right away, as the automatic check does, so it too installs at the next start.
+    private async Task DownloadAsync(AvailableUpdate update)
     {
-        if (_available is not { } update) return;
         DownloadPercent = 0;
-        Show(UpdateStage.Downloading, $"Downloading Smart Paste {update.Version}. It restarts by itself when it's done.");
+        Show(UpdateStage.Downloading, $"Downloading Smart Paste {update.Version}…");
+        var progress = new Progress<int>(percent => DownloadPercent = Math.Clamp(percent, 0, 100));
+        if (!await _context.Services.Updates.DownloadAsync(update, progress, _lifetime.Token))
+        {
+            Show(UpdateStage.Failed, "Couldn't download the update. Check your internet connection, then try again.");
+            return;
+        }
+        ShowReady(update);
+        // Share it with the tray, which shows that an update is waiting.
+        _context.Services.State.Update = update;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanRestart))]
+    private async Task RestartAsync()
+    {
+        if (_ready is not { } update) return;
+        Show(UpdateStage.Restarting, "Restarting…");
         try
         {
-            var progress = new Progress<int>(percent => DownloadPercent = Math.Clamp(percent, 0, 100));
-            if (!await _context.Services.Updates.DownloadAsync(update, progress, _lifetime.Token))
-            {
-                _available = null;
-                Show(UpdateStage.Failed, "Couldn't download the update. Check your internet connection, then try again.");
-                return;
-            }
-            Show(UpdateStage.Restarting, "Restarting…");
-            if (!_context.Services.Updates.ApplyAndRestart(update))
-            {
-                _available = null;
+            // The update is on this PC already; this only makes sure (the package is found and kept).
+            if (!await _context.Services.Updates.DownloadAsync(update, progress: null, _lifetime.Token) ||
+                !_context.Services.Updates.ApplyAndRestart(update))
                 Show(UpdateStage.Failed, "Couldn't install the update. Try again, or download it from the website.");
-            }
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
@@ -143,20 +160,35 @@ internal sealed partial class AboutViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         _context.Services.Settings.Changed -= OnSettingsChanged;
+        _context.Services.State.PropertyChanged -= OnStateChanged;
         _lifetime.Cancel();
         _lifetime.Dispose();
     }
 
-    private void ShowAvailable(AvailableUpdate update)
+    private void ShowReady(AvailableUpdate update)
     {
-        _available = update;
-        Show(UpdateStage.Available, $"Version {update.Version} is available. Smart Paste downloads it, then restarts.");
+        _ready = update;
+        Show(UpdateStage.Ready, $"Version {update.Version} is ready. It installs the next time Smart Paste starts.");
+        ReleaseNotes = ReleaseNotesText.ToPlainText(update.ReleaseNotesMarkdown);
     }
 
     private void Show(UpdateStage stage, string message)
     {
         UpdateMessage = message;
         Stage = stage;
+        if (stage is not (UpdateStage.Ready or UpdateStage.Restarting)) ReleaseNotes = "";
+    }
+
+    // The automatic check found and downloaded a version while this page was open.
+    private void OnStateChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(AppState.Update)) return;
+        _context.Post(() =>
+        {
+            if (_context.Services.State.Update is { } update && !ReferenceEquals(update, _ready) &&
+                Stage is UpdateStage.Idle or UpdateStage.Checking or UpdateStage.UpToDate or UpdateStage.Failed)
+                ShowReady(update);
+        });
     }
 
     private void OnSettingsChanged(AppSettings previous, AppSettings current) => _context.Post(Load);

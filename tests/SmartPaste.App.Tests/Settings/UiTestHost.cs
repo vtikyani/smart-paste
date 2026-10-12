@@ -2,15 +2,13 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
-using SmartPaste.App;
-using SmartPaste.App.Infrastructure;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
 namespace SmartPaste.App.Tests.Settings;
 
-// Runs UI tests on one long-lived STA thread that owns the app's real Application object, so windows and pages
-// load the same resources (WPF-UI themes, Brand tokens, brand art) as the shipped app. WPF allows only one
+// Runs UI tests on the one long-lived STA thread that owns the app's real Application object (WpfHost), so windows
+// and pages load the same resources (WPF-UI themes, Brand tokens, brand art) as the shipped app. WPF allows only one
 // Application per process, so every UI test shares it.
 internal static class UiTestHost
 {
@@ -30,9 +28,7 @@ internal static class UiTestHost
         "settings-shortcuts-light"
     };
 
-    private static readonly Lazy<Dispatcher> Ui = new(Start, LazyThreadSafetyMode.ExecutionAndPublication);
-
-    public static Dispatcher UiDispatcher => Ui.Value;
+    public static Dispatcher UiDispatcher => WpfHost.Dispatcher;
 
     public static void Run(Action test) => Run(() =>
     {
@@ -43,7 +39,7 @@ internal static class UiTestHost
     // Runs the test on the UI thread and waits for it; async continuations stay on the UI thread.
     public static void Run(Func<Task> test)
     {
-        var operation = Ui.Value.InvokeAsync(test);
+        var operation = UiDispatcher.InvokeAsync(test);
         operation.Task.Unwrap().GetAwaiter().GetResult();
     }
 
@@ -136,36 +132,5 @@ internal static class UiTestHost
         for (var i = 0; i < pixels.Length && distinct.Count < 16; i += 4 * 97)
             distinct.Add(BitConverter.ToInt32(pixels, i));
         return distinct.Count >= 16;
-    }
-
-    private static Dispatcher Start()
-    {
-        if (Application.Current is { } existing) return existing.Dispatcher;
-
-        var ready = new TaskCompletionSource<Dispatcher>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var thread = new Thread(() =>
-        {
-            try
-            {
-                // The real app object, so App.xaml's dictionaries load exactly as in the product. Its host
-                // (keyboard hook, tray) only starts in OnStartup, which never runs here.
-                var app = new App(SingleInstance.Acquire());
-                app.InitializeComponent();
-                ready.SetResult(Dispatcher.CurrentDispatcher);
-            }
-            catch (Exception ex)
-            {
-                ready.SetException(ex);
-                return;
-            }
-            Dispatcher.Run();
-        })
-        {
-            IsBackground = true,
-            Name = "UI tests"
-        };
-        thread.SetApartmentState(ApartmentState.STA);
-        thread.Start();
-        return ready.Task.GetAwaiter().GetResult();
     }
 }

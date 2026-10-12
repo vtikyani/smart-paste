@@ -4,18 +4,34 @@ using SmartPaste.Core;
 
 namespace SmartPaste.App.Services;
 
-// The practice form in the welcome tour. Runs the real pipeline in-process (Smart Paste never intercepts its own
-// windows): the copied text is read like any copy, and the field is decided like any field, by Jev when a key is
-// saved and by the local label list otherwise.
-internal sealed class PracticeEngine(HttpClient http, DecisionService decisions, SettingsStore settings) : IPracticeEngine
+// The welcome tour's sample contact block: the only text the practice form ever works with. Tutorial content, with
+// reserved example values: example.com addresses and 555-01xx phone numbers never belong to a real person.
+internal static class PracticeSample
 {
-    // One block is pasted into several practice fields; it is read once.
-    private (string Text, Profile Profile)? _last;
+    public const string Text = "Jordan Rivera\njordan.rivera@example.com\n(201) 555-0143\n48 Maple Avenue\nHoboken, NJ 07030";
+
+    // Whether clipboard text is the sample as the tour's Copy button put it there (line endings may come back
+    // changed). Anything else is the user's own text, like an API key copied a moment ago.
+    public static bool Is(string? text) =>
+        text is not null && text.Replace("\r\n", "\n").Replace('\r', '\n').Trim() == Text;
+}
+
+// The practice form in the welcome tour. Runs the real pipeline in-process (Smart Paste never intercepts its own
+// windows): the sample is read like any copy, and the field is decided like any field, by Jev when a key is saved and
+// by the local label list otherwise. It works on the sample only: other text never goes to OpenRouter or Jev from
+// here. One engine serves one run of the tour; disposing it when the tour closes drops what it read.
+internal sealed class PracticeEngine(HttpClient http, DecisionService decisions, SettingsStore settings) : IPracticeEngine, IDisposable
+{
+    private readonly object _gate = new();
+    // The sample, read once for every practice field.
+    private Profile? _sample;
+    private bool _disposed;
 
     public async Task<PracticeResult?> PasteIntoAsync(string fieldLabel, string clipboardText, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(clipboardText) || string.IsNullOrWhiteSpace(fieldLabel)) return null;
-        var profile = await ReadAsync(clipboardText, ct);
+        lock (_gate) ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!PracticeSample.Is(clipboardText) || string.IsNullOrWhiteSpace(fieldLabel)) return null;
+        var profile = await ReadSampleAsync(ct);
         if (profile.Keys.Count == 0) return null;
 
         var field = new FieldContext(fieldLabel, null, null, fieldLabel, "Edit", false, []);
@@ -37,15 +53,18 @@ internal sealed class PracticeEngine(HttpClient http, DecisionService decisions,
         return new PracticeResult(pick.Value, FieldKeys.DisplayName(pick.Key), decidedBy);
     }
 
-    private async Task<Profile> ReadAsync(string text, CancellationToken ct)
+    private async Task<Profile> ReadSampleAsync(CancellationToken ct)
     {
-        if (_last is { } last && last.Text == text) return last.Profile;
-        var profile = LocalExtractor.Extract(text, DateTimeOffset.UtcNow);
-        if (CredentialStore.Get(CredentialStore.OpenRouter) is { } key && text.Length <= TextHeuristics.MaxChars)
+        lock (_gate)
+        {
+            if (_sample is { } read) return read;
+        }
+        var profile = LocalExtractor.Extract(PracticeSample.Text, DateTimeOffset.UtcNow);
+        if (CredentialStore.Get(CredentialStore.OpenRouter) is { } key)
         {
             try
             {
-                var parsed = await new OpenRouterParser(http, key, settings.Current.ParsingModel).ParseTextAsync(text, DateTimeOffset.UtcNow, ct);
+                var parsed = await new OpenRouterParser(http, key, settings.Current.ParsingModel).ParseTextAsync(PracticeSample.Text, DateTimeOffset.UtcNow, ct);
                 profile = ProfileParser.Merge(parsed, profile);
             }
             catch (ServiceException ex)
@@ -54,7 +73,20 @@ internal sealed class PracticeEngine(HttpClient http, DecisionService decisions,
                 Log.Event("practice_parse_error", ("reason", ex.Failure.ToString()));
             }
         }
-        _last = (text, profile);
+        lock (_gate)
+        {
+            if (!_disposed) _sample = profile;
+        }
         return profile;
+    }
+
+    // The tour closed.
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            _disposed = true;
+            _sample = null;
+        }
     }
 }

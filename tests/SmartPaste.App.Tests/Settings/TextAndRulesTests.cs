@@ -96,7 +96,9 @@ public sealed class TextAndRulesTests
     [Fact]
     public void RouteSummarySaysWhatHappensNow()
     {
-        Assert.Equal("Right now that's TypeSafe.", JevViewModel.DescribeRoute(Infrastructure.JevRoute.Auto, true, true));
+        // Automatic asks TypeSafe first and OpenRouter if that fails, when both keys are saved.
+        Assert.Equal("Right now that's TypeSafe, with OpenRouter as the backup.", JevViewModel.DescribeRoute(Infrastructure.JevRoute.Auto, true, true));
+        Assert.Equal("Right now that's TypeSafe.", JevViewModel.DescribeRoute(Infrastructure.JevRoute.Auto, true, false));
         Assert.Equal("Right now that's OpenRouter.", JevViewModel.DescribeRoute(Infrastructure.JevRoute.Auto, false, true));
         Assert.Equal("No key is saved yet, so built-in labels pick values for now.", JevViewModel.DescribeRoute(Infrastructure.JevRoute.Auto, false, false));
         Assert.Contains("No TypeSafe key", JevViewModel.DescribeRoute(Infrastructure.JevRoute.TypeSafe, false, true));

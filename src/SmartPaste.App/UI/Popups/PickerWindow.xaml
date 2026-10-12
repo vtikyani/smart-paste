@@ -99,13 +99,18 @@
               x:Name="List"
               Focusable="False"
               ItemsSource="{Binding Rows}">
+              <!-- Screen readers name list items from their container; without this they read the type name. -->
+              <ItemsControl.ItemContainerStyle>
+                <Style TargetType="ContentPresenter">
+                  <Setter Property="AutomationProperties.Name" Value="{Binding SpokenText}" />
+                </Style>
+              </ItemsControl.ItemContainerStyle>
               <ItemsControl.ItemTemplate>
                 <DataTemplate>
                   <Border
                     x:Name="Row"
                     Margin="0,1"
                     Padding="10,7,12,7"
-                    AutomationProperties.Name="{Binding SpokenText}"
                     Background="Transparent"
                     CornerRadius="8"
                     MouseLeftButtonUp="OnRowClicked">
@@ -194,7 +199,7 @@
               VerticalAlignment="Center"
               FontSize="12"
               Foreground="{DynamicResource Brand.PopupSubtleTextBrush}"
-              Text="paste original" />
+              Text="{Binding EscapeHint}" />
           </StackPanel>
         </Border>
       </Grid>

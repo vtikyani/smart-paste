@@ -6,8 +6,8 @@ using SmartPaste.App.Services;
 namespace SmartPaste.App.UI.Popups;
 
 // One open picker. Turns key presses from the keyboard hook, clicks, a timeout, and cancellation into exactly one
-// PickResult. Accepts runs on the hook thread and reads only fields fixed at construction or volatile; everything
-// else runs on the UI thread.
+// PickResult. Accepts runs on the hook thread and touches only fields fixed at construction, volatile fields, and
+// its own counter; everything else runs on the UI thread.
 internal sealed class PickSession : IKeySink
 {
     private const int VkBack = 0x08;
@@ -44,6 +44,17 @@ internal sealed class PickSession : IKeySink
     // them, so pressing Shift (before a capital letter) or Caps Lock does not close the picker.
     private readonly ConcurrentQueue<bool> _passedThrough = new();
     private volatile bool _finished;
+    // Set on the hook thread by the key that ends the session, before the UI thread has handled it: every key after it
+    // goes to the app.
+    private volatile bool _closing;
+    // The rows on screen, published by the UI thread whenever the list changes, so the hook thread can tell whether a
+    // number key picks a row.
+    private volatile int _rowCount;
+    // Accepted keys are handed to OnKey one by one, in order. The hook thread numbers them (hook thread only) and
+    // records the number of the one that ends the session; the UI thread counts them as they arrive.
+    private int _acceptedKeys;
+    private volatile int _closingKey;
+    private int _handledKeys;
     private DispatcherTimer? _timer;
     private IDisposable? _capture;
     private CancellationTokenRegistration _cancellation;
@@ -65,6 +76,7 @@ internal sealed class PickSession : IKeySink
     public void Start(IKeyCapture keyCapture, CancellationToken ct)
     {
         _picker.ViewModel.Load(_request);
+        _rowCount = _picker.ViewModel.Rows.Count;
         _picker.RowClicked += OnRowClicked;
         _picker.Present(_request.Anchor);
         _timer = new DispatcherTimer(_timeout, DispatcherPriority.Normal, (_, _) => Finish(PickResult.Dismissed), _dispatcher);
@@ -96,23 +108,47 @@ internal sealed class PickSession : IKeySink
         Finished?.Invoke(this, EventArgs.Empty);
     }
 
-    // Hook thread: decides in microseconds, touching nothing but immutable and volatile state.
+    // Hook thread: decides in microseconds, without locks. The session ends on the UI thread, a moment after the key
+    // that ends it was accepted here; a key typed in that moment must not be swallowed and then dropped. So the key
+    // that ends the session (Escape, Enter on a row, a row's number) closes it here at once, and every key after it
+    // goes to the app, in order.
     public bool Accepts(in KeyStroke key)
     {
-        var accepted = !_finished && Wanted(key);
-        if (!accepted) _passedThrough.Enqueue(IsModifier(key.VirtualKey));
-        return accepted;
+        var accepted = !_closing && !_finished && Wanted(key);
+        if (!accepted)
+        {
+            _passedThrough.Enqueue(IsModifier(key.VirtualKey));
+            return false;
+        }
+        var number = ++_acceptedKeys;
+        if (Ends(key))
+        {
+            _closingKey = number;
+            _closing = true;
+        }
+        return true;
     }
 
     public void OnKey(KeyStroke key)
     {
         if (_finished) return;
+        var closing = ++_handledKeys == _closingKey;
+        Handle(key);
+        // The hook judged this key to end the picker from the list as it was; a filter typed a moment before can have
+        // changed that (no such row any more). The keys after it went to the app already, so end it all the same.
+        if (closing && !_finished) Finish(PickResult.Dismissed);
+    }
+
+    private void Handle(KeyStroke key)
+    {
         RestartTimeout();
         var list = _picker.ViewModel;
         switch (key.VirtualKey)
         {
             case VkEscape:
-                Finish(PickResult.Original);
+                // After Ctrl+V, Escape pastes what was copied, as if Smart Paste weren't there. The picker shortcut
+                // was no paste at all, so there Escape only closes.
+                Finish(_request.Mode == PickMode.AllValues ? PickResult.Dismissed : PickResult.Original);
                 return;
             case VkReturn:
                 if (list.Selected is { } selected) Finish(PickResult.Chose(selected.Candidate));
@@ -143,12 +179,14 @@ internal sealed class PickSession : IKeySink
                 break;
             case VkBack:
                 list.Backspace();
+                _rowCount = list.Rows.Count;
                 _picker.Refit(_request.Anchor);
                 break;
             default:
                 if (key.Character is { } character)
                 {
                     list.Type(character);
+                    _rowCount = list.Rows.Count;
                     _picker.Refit(_request.Anchor);
                 }
                 break;
@@ -167,9 +205,9 @@ internal sealed class PickSession : IKeySink
         if (!_picker.Contains(x, y)) Finish(PickResult.Dismissed);
     }
 
-    // Number keys choose (a number with no row is ignored), arrows and Enter navigate, Escape pastes the original.
-    // In "all values" mode, Backspace and printable characters filter. Anything else, and any shortcut with Ctrl,
-    // Alt, or Windows, goes to the app and closes the picker.
+    // Number keys choose (a number with no row is ignored), arrows and Enter navigate, Escape closes (after Ctrl+V,
+    // pasting the original). In "all values" mode, Backspace and printable characters filter. Anything else, and any
+    // shortcut with Ctrl, Alt, or Windows, goes to the app and closes the picker.
     private bool Wanted(in KeyStroke key)
     {
         const KeyModifiers Shortcut = KeyModifiers.Control | KeyModifiers.Alt | KeyModifiers.Windows;
@@ -192,6 +230,21 @@ internal sealed class PickSession : IKeySink
         }
         return _filterable && IsPrintable(key.Character);
     }
+
+    // Hook thread, for a wanted key: whether handling it ends the session, by the same rules as Handle, judged from the
+    // row count the UI thread published last.
+    private bool Ends(in KeyStroke key) => key.VirtualKey switch
+    {
+        VkEscape => true,
+        // Enter chooses the selected row; there is one whenever the list has rows.
+        VkReturn => _rowCount > 0,
+        >= Vk1 and <= Vk9 when key.Modifiers == KeyModifiers.None => IsRowNumber(key.VirtualKey - Vk1 + 1),
+        >= VkNumpad1 and <= VkNumpad9 when (key.Modifiers & (KeyModifiers.Control | KeyModifiers.Alt)) == 0 =>
+            IsRowNumber(key.VirtualKey - VkNumpad1 + 1),
+        _ => false
+    };
+
+    private bool IsRowNumber(int number) => number <= Math.Min(_rowCount, PickerViewModel.Numbered);
 
     private static bool IsPrintable(char? character) => character is { } c && !char.IsControl(c);
 

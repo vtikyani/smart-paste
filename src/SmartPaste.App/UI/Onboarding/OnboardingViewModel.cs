@@ -26,6 +26,10 @@ internal sealed partial class StepDot : ObservableObject
 
     [ObservableProperty]
     public partial bool IsDone { get; set; }
+
+    // What a screen reader says for the dot: "Step 2 of 6, done".
+    public override string ToString() =>
+        $"Step {(int)Step + 1} of {OnboardingViewModel.StepCount}" + (IsCurrent ? ", current" : IsDone ? ", done" : "");
 }
 
 // The welcome tour: six short steps, Back / Next / Skip, and what happens when it ends. Finishing or closing it
@@ -45,6 +49,8 @@ internal sealed partial class OnboardingViewModel : ObservableObject, IDisposabl
         OpenRouterKey.PropertyChanged += OnKeyChanged;
         context.Services.Settings.Changed += OnSettingsChanged;
         BlockLifetime = StatusText.Minutes(context.Settings.ProfileLifetimeMinutes);
+        // As things are now (on at first run), so taking the tour again never turns it back on by itself.
+        StartAtLogin = StartupRegistration.IsEnabledOr(context.Settings.StartAtLogin);
         RefreshDots();
     }
 
@@ -72,7 +78,7 @@ internal sealed partial class OnboardingViewModel : ObservableObject, IDisposabl
 
     // Applied when the tour finishes, not before: closing early keeps whatever was set already.
     [ObservableProperty]
-    public partial bool StartAtLogin { get; set; } = true;
+    public partial bool StartAtLogin { get; set; }
 
     // "15 minutes", for the privacy step.
     [ObservableProperty]

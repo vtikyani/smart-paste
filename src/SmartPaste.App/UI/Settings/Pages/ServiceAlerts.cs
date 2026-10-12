@@ -3,7 +3,11 @@ using Wpf.Ui.Controls;
 
 namespace SmartPaste.App.UI.Settings.Pages;
 
-internal sealed record ServiceAlert(InfoBarSeverity Severity, string Title, string Message);
+internal sealed record ServiceAlert(InfoBarSeverity Severity, string Title, string Message)
+{
+    // What a screen reader says for the alert in its list.
+    public override string ToString() => $"{Title}. {Message}";
+}
 
 // Turns the live health of parsing and Jev into plain messages for the Jev & AI page. Each says what's wrong,
 // what Smart Paste does meanwhile, and how to fix it.

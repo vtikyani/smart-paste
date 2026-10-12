@@ -8,9 +8,16 @@ using Wpf.Ui.Controls;
 
 namespace SmartPaste.App.UI.Settings.Pages;
 
-internal sealed record ThemeChoice(ThemePreference Value, string Label);
+// A screen reader names a list's items by ToString, so each choice reads as its label.
+internal sealed record ThemeChoice(ThemePreference Value, string Label)
+{
+    public override string ToString() => Label;
+}
 
-internal sealed record LifetimeChoice(int Minutes, string Label);
+internal sealed record LifetimeChoice(int Minutes, string Label)
+{
+    public override string ToString() => Label;
+}
 
 // The General page: on/off, pause, start-up, theme, and how pasting behaves.
 internal sealed partial class GeneralViewModel : ObservableObject, IDisposable
@@ -137,7 +144,8 @@ internal sealed partial class GeneralViewModel : ObservableObject, IDisposable
                 : PauseText is { } paused
                     ? paused + ". Ctrl+V pastes normally until then."
                     : "Ctrl+V pastes the right value into each form field.";
-            StartAtLogin = ReadStartAtLogin(settings);
+            // The real start-up entry, since it can be removed or switched off outside Smart Paste.
+            StartAtLogin = StartupRegistration.IsEnabledOr(settings.StartAtLogin);
             SelectedTheme = Themes.First(t => t.Value == settings.Theme);
             SelectedLifetime = Lifetimes.FirstOrDefault(l => l.Minutes == settings.ProfileLifetimeMinutes);
             ShowFieldHints = settings.ShowFieldHints;
@@ -147,22 +155,6 @@ internal sealed partial class GeneralViewModel : ObservableObject, IDisposable
         finally
         {
             _loading = false;
-        }
-    }
-
-    // The real start-up entry, since it can be removed outside Smart Paste. An isolated copy
-    // (SMARTPASTE_DATA_DIR) never registers itself, so for it the saved setting is the truth.
-    private static bool ReadStartAtLogin(AppSettings settings)
-    {
-        if (AppPaths.IsIsolated) return settings.StartAtLogin;
-        try
-        {
-            return StartupRegistration.IsEnabled();
-        }
-        catch (Exception ex) when (ex is SecurityException or UnauthorizedAccessException or IOException)
-        {
-            Log.Error("startup_read_error", ex);
-            return settings.StartAtLogin;
         }
     }
 

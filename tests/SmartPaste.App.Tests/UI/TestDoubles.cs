@@ -51,6 +51,22 @@ internal sealed class ManualKeyCapture : IKeyCapture
         return false;
     }
 
+    // As the hook does when keys come faster than the UI thread handles them: every key is offered (Accepts) before
+    // the first one is handled; then each is handled in order, unless the capture has ended by then. Returns which
+    // keys the sink took.
+    public bool[] PressQuickly(params KeyStroke[] keys)
+    {
+        var sink = Sink ?? throw new InvalidOperationException("Nothing is capturing keys.");
+        var accepted = keys.Select(key => sink.Accepts(key)).ToArray();
+        for (var i = 0; i < keys.Length; i++)
+        {
+            if (!ReferenceEquals(Sink, sink)) break;
+            if (accepted[i]) sink.OnKey(keys[i]);
+            else sink.OnOtherKey();
+        }
+        return accepted;
+    }
+
     private sealed class Release(ManualKeyCapture owner, IKeySink sink) : IDisposable
     {
         public void Dispose()

@@ -73,6 +73,12 @@ internal sealed partial class ArmedBlockViewModel : ObservableObject
 internal sealed record FieldGroupViewModel(string? Title, IReadOnlyList<FieldRowViewModel> Rows)
 {
     public bool HasTitle => Title is not null;
+
+    // What a screen reader calls the group. A single group shows no title on screen.
+    public string SpokenTitle => Title ?? "Copied values";
+
+    // Screen readers fall back to this for a list item; never the record's field dump.
+    public override string ToString() => SpokenTitle;
 }
 
 // One field of the armed block: its name and its value, hidden behind dots until the user reveals values.
@@ -92,15 +98,21 @@ internal sealed partial class FieldRowViewModel : ObservableObject
     [ObservableProperty]
     public partial string DisplayValue { get; private set; } = "";
 
-    // What a screen reader says: never the dots.
+    // What a screen reader says for the row and for its value: "hidden", never the dots.
     [ObservableProperty]
     public partial string SpokenText { get; private set; } = "";
+
+    [ObservableProperty]
+    public partial string SpokenValue { get; private set; } = "";
 
     public void SetReveal(bool reveal)
     {
         DisplayValue = reveal ? _value : DisplayText.Masked;
-        SpokenText = reveal ? $"{Name}: {_value}" : $"{Name}: hidden";
+        SpokenValue = reveal ? _value : "hidden";
+        SpokenText = $"{Name}: {SpokenValue}";
     }
+
+    public override string ToString() => SpokenText;
 }
 
 // One past smart paste: the form's label, the kind of value, who decided, and when. Never the value itself.
@@ -140,9 +152,15 @@ internal sealed partial class RecentEntryViewModel : ObservableObject
     public bool IsSmartPaste => Outcome == ActivityOutcome.Pasted;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SpokenText))]
     public partial string When { get; private set; } = "";
 
+    // What a screen reader says for the entry: "Email address, Email · Jev · chrome, 4 min ago".
+    public string SpokenText => $"{Label}, {Detail}, {When}";
+
     public void Tick(DateTimeOffset now) => When = DisplayText.Ago(_at, now);
+
+    public override string ToString() => SpokenText;
 
     private static string Decider(DecisionMaker? decider) => decider switch
     {

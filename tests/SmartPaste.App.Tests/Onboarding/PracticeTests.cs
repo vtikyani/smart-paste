@@ -96,7 +96,7 @@ public sealed class PracticeTests
     });
 
     [Fact]
-    public void NothingToPasteIsExplained() => UiTestHost.Run(async () =>
+    public void AnythingButTheSampleOnlyGetsAHint() => UiTestHost.Run(async () =>
     {
         using var ui = new TestUi();
         using var vm = new PracticeViewModel(ui.Context);
@@ -104,13 +104,62 @@ public sealed class PracticeTests
 
         await vm.PasteAsync(field);
         Assert.Equal(PracticeFieldState.Problem, field.State);
-        Assert.Equal("Your clipboard is empty. Copy the sample first.", field.Caption);
-        Assert.Empty(ui.Practice.Calls);
+        Assert.Equal("Click Copy first, then paste here.", field.Caption);
 
         ui.Clipboard.Text = "Some unrelated text";
         await vm.PasteAsync(field);
-        Assert.Equal("Nothing you copied fits this field. Copy the sample, then try again.", field.Caption);
+        Assert.Equal("Click Copy first, then paste here.", field.Caption);
         Assert.Equal("", field.Value);
+        Assert.Empty(ui.Practice.Calls);
+    });
+
+    [Fact]
+    public void ACopiedSecretNeverReachesTheEngine() => UiTestHost.Run(async () =>
+    {
+        using var ui = new TestUi();
+        ui.Practice.Results["Email address"] = ByJev("jordan.rivera@example.com", "Email");
+        using var vm = new PracticeViewModel(ui.Context);
+        vm.CopySampleCommand.Execute(null);
+
+        // Say the key pasted into the Connect step a moment ago is on the clipboard now, or the sample with more
+        // text around it.
+        foreach (var copied in new[] { "sk-or-v1-5f2b8c0e9d7a41f3b6c2e8d0a9f1b3c5", PracticeViewModel.SampleBlock + "\nA private note" })
+        {
+            ui.Clipboard.Text = copied;
+            foreach (var field in vm.Fields) await vm.PasteAsync(field);
+        }
+
+        Assert.Empty(ui.Practice.Calls);
+        Assert.All(vm.Fields, f => Assert.Equal("Click Copy first, then paste here.", f.Caption));
+    });
+
+    [Fact]
+    public void TheSampleWithWindowsLineEndingsStillWorks() => UiTestHost.Run(async () =>
+    {
+        using var ui = new TestUi();
+        ui.Practice.Results["First name"] = ByJev("Jordan", "First name");
+        using var vm = new PracticeViewModel(ui.Context);
+        ui.Clipboard.Text = PracticeViewModel.SampleBlock.Replace("\n", "\r\n") + "\r\n";
+
+        await vm.PasteAsync(vm.Fields[0]);
+
+        Assert.Equal([("First name", PracticeViewModel.SampleBlock)], ui.Practice.Calls);
+        Assert.Equal("Jordan", vm.Fields[0].Value);
+    });
+
+    [Fact]
+    public void ClosingTheTourDisposesItsEngine() => UiTestHost.Run(async () =>
+    {
+        using var ui = new TestUi();
+        ui.Practice.Results["First name"] = ByJev("Jordan", "First name");
+        var vm = new PracticeViewModel(ui.Context);
+        vm.CopySampleCommand.Execute(null);
+        await vm.PasteAsync(vm.Fields[0]);
+        Assert.False(ui.Practice.IsDisposed);
+
+        vm.Dispose();
+
+        Assert.True(ui.Practice.IsDisposed);
     });
 
     [Fact]
@@ -151,7 +200,7 @@ public sealed class PracticeTests
     {
         using var ui = new TestUi();
         using var vm = new PracticeViewModel(new UI.Settings.SettingsContext(
-            ui.Services with { Practice = new ThrowingEngine() }, ui.Navigator, ui.Prompts, ui.Context.Dispatcher));
+            ui.Services with { CreatePracticeEngine = () => new ThrowingEngine() }, ui.Navigator, ui.Prompts, ui.Context.Dispatcher));
         ui.Clipboard.Text = PracticeViewModel.SampleBlock;
 
         await vm.PasteAsync(vm.Fields[0]);

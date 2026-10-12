@@ -75,20 +75,27 @@ internal sealed partial class PracticeFieldViewModel : ObservableObject
         State = PracticeFieldState.Empty;
         Caption = "";
     }
+
+    // What a screen reader says for the field in the practice form's list.
+    public override string ToString() => Label;
 }
 
 // The "Try it" step: a sample contact block to copy and a small form to paste into. Ctrl+V in the form runs the
-// real decision pipeline in-process (IPracticeEngine), so nothing here is staged.
+// real decision pipeline in-process (IPracticeEngine), so nothing here is staged. It only ever runs on the sample:
+// whatever else is on the clipboard is the user's own (an API key pasted in the Connect step, say) and stays on
+// this PC.
 internal sealed partial class PracticeViewModel : ObservableObject, IDisposable
 {
-    // Tutorial content for this exercise only, with reserved example values: example.com addresses and 555-01xx
-    // phone numbers never belong to a real person.
-    public const string SampleBlock = "Jordan Rivera\njordan.rivera@example.com\n(201) 555-0143\n48 Maple Avenue\nHoboken, NJ 07030";
+    public const string SampleBlock = PracticeSample.Text;
+
+    private const string CopyFirst = "Click Copy first, then paste here.";
 
     private static readonly TimeSpan DecisionTimeout = TimeSpan.FromSeconds(20);
 
     private readonly SettingsContext _context;
     private readonly CancellationTokenSource _lifetime = new();
+    // Created on the first paste and disposed with the tour, so what it read goes with it.
+    private IPracticeEngine? _engine;
 
     public PracticeViewModel(SettingsContext context)
     {
@@ -135,7 +142,8 @@ internal sealed partial class PracticeViewModel : ObservableObject, IDisposable
         }
     }
 
-    // Ctrl+V in a practice field: read the clipboard now and let the real pipeline decide.
+    // Ctrl+V in a practice field: if the clipboard holds the sample, let the real pipeline decide. Anything else is
+    // left alone: it is never read further, parsed, or sent anywhere.
     public async Task PasteAsync(PracticeFieldViewModel field)
     {
         if (field.IsDeciding) return;
@@ -150,9 +158,9 @@ internal sealed partial class PracticeViewModel : ObservableObject, IDisposable
             field.ShowProblem("Another app is using the clipboard. Try again in a moment.");
             return;
         }
-        if (string.IsNullOrWhiteSpace(text))
+        if (!PracticeSample.Is(text))
         {
-            field.ShowProblem("Your clipboard is empty. Copy the sample first.");
+            field.ShowProblem(CopyFirst);
             return;
         }
 
@@ -162,14 +170,15 @@ internal sealed partial class PracticeViewModel : ObservableObject, IDisposable
         timeout.CancelAfter(DecisionTimeout);
         try
         {
-            var result = await _context.Services.Practice.PasteIntoAsync(field.Label, text, timeout.Token);
+            _engine ??= _context.Services.CreatePracticeEngine();
+            var result = await _engine.PasteIntoAsync(field.Label, SampleBlock, timeout.Token);
             if (result is null)
             {
-                field.ShowProblem("Nothing you copied fits this field. Copy the sample, then try again.");
+                field.ShowProblem("The sample has nothing for this field.");
                 return;
             }
             var byJev = IsJev(result.DecidedBy);
-            field.Fill(result.Value, Describe(result, byJev, text), byJev);
+            field.Fill(result.Value, Describe(result, byJev), byJev);
             Log.Event("practice_paste", ("source", byJev ? "jev" : "local"));
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
@@ -192,10 +201,10 @@ internal sealed partial class PracticeViewModel : ObservableObject, IDisposable
     public static bool IsJev(string decidedBy) => decidedBy.Equals(nameof(DecisionMaker.Jev), StringComparison.OrdinalIgnoreCase);
 
     // Who chose the value, in words.
-    private string Describe(PracticeResult result, bool byJev, string clipboardText)
+    private string Describe(PracticeResult result, bool byJev)
     {
-        // The value isn't in the copied text word for word when it was reshaped for the field (NJ to New Jersey).
-        var reshaped = !clipboardText.Contains(result.Value, StringComparison.OrdinalIgnoreCase);
+        // The value isn't in the sample word for word when it was reshaped for the field (NJ to New Jersey).
+        var reshaped = !SampleBlock.Contains(result.Value, StringComparison.OrdinalIgnoreCase);
         if (byJev) return reshaped ? "Jev picked this and formatted it for the field." : "Jev picked this.";
 
         var who = result.DecidedBy.ToLowerInvariant() switch
@@ -225,5 +234,7 @@ internal sealed partial class PracticeViewModel : ObservableObject, IDisposable
     {
         _lifetime.Cancel();
         _lifetime.Dispose();
+        (_engine as IDisposable)?.Dispose();
+        _engine = null;
     }
 }

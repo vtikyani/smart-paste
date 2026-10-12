@@ -89,6 +89,10 @@
               <ColumnDefinition Width="*" />
               <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
             <ui:SymbolIcon Margin="0,0,12,0" VerticalAlignment="Center" FontSize="18" Filled="True">
               <ui:SymbolIcon.Style>
                 <Style TargetType="ui:SymbolIcon">
@@ -99,8 +103,8 @@
                       <Setter Property="Symbol" Value="CheckmarkCircle24" />
                       <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
                     </DataTrigger>
-                    <DataTrigger Binding="{Binding Stage}" Value="Available">
-                      <Setter Property="Symbol" Value="ArrowDownload24" />
+                    <DataTrigger Binding="{Binding Stage}" Value="Ready">
+                      <Setter Property="Symbol" Value="ArrowCircleUp24" />
                       <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
                     </DataTrigger>
                     <DataTrigger Binding="{Binding Stage}" Value="Downloading">
@@ -130,9 +134,18 @@
               Grid.Column="2"
               Margin="16,0,0,0"
               Appearance="Primary"
-              Command="{Binding InstallCommand}"
-              Content="Download and restart"
-              Visibility="{Binding CanInstall, Converter={StaticResource Settings.BoolToVisibility}}" />
+              Command="{Binding RestartCommand}"
+              Content="Restart now"
+              Visibility="{Binding CanRestart, Converter={StaticResource Settings.BoolToVisibility}}" />
+            <!-- What's new in that version, from its release notes. -->
+            <TextBlock
+              Grid.Row="1"
+              Grid.Column="1"
+              Grid.ColumnSpan="2"
+              Margin="0,8,0,0"
+              Style="{StaticResource Settings.Prose}"
+              Text="{Binding ReleaseNotes}"
+              Visibility="{Binding ReleaseNotes, Converter={StaticResource Settings.TextToVisible}}" />
           </Grid>
         </Border>
       </StackPanel>
@@ -142,7 +155,7 @@
       <ui:CardControl.Header>
         <StackPanel>
           <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Check for updates automatically" />
-          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="Smart Paste lets you know when a new version is out. It never installs one without you." />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="New versions download in the background and install the next time Smart Paste starts." />
         </StackPanel>
       </ui:CardControl.Header>
       <ui:ToggleSwitch

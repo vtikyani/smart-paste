@@ -79,6 +79,20 @@ public sealed class OnboardingViewModelTests
     });
 
     [Fact]
+    public void TakingTheTourAgainKeepsStartAtLoginAsItIs() => UiTestHost.Run(() =>
+    {
+        using var ui = new TestUi();
+        ui.Settings.Update(s => s with { StartAtLogin = false, OnboardingCompleted = true });
+        using var vm = new OnboardingViewModel(ui.Context);
+        Assert.False(vm.StartAtLogin);
+
+        vm.Step = OnboardingStep.Ready;
+        vm.NextCommand.Execute(null);
+
+        Assert.False(ui.Settings.Current.StartAtLogin);
+    });
+
+    [Fact]
     public void SkippingMarksTheTourSeenButLeavesStartUpAlone() => UiTestHost.Run(() =>
     {
         using var ui = new TestUi();

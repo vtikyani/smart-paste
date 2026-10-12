@@ -76,12 +76,83 @@ public sealed class PickerTests
     }
 
     [Fact]
-    public async Task EscapePastesTheOriginal()
+    public async Task EscapeAfterCtrlVPastesTheOriginal()
     {
-        var result = await Pick(DocSample.NamePick(Anchor), (keys, _) => Press(keys, VkEscape));
+        var result = await Pick(DocSample.NamePick(Anchor), (keys, feedback) =>
+        {
+            Assert.Equal("paste original", feedback.Picker.ViewModel.EscapeHint);
+            return Press(keys, VkEscape);
+        });
         Assert.Equal(PickOutcome.PasteOriginal, result.Outcome);
         Assert.Null(result.Candidate);
     }
+
+    [Fact]
+    public async Task EscapeInThePickerFromTheShortcutOnlyCloses()
+    {
+        // The shortcut was no paste, so there is nothing "original" to paste.
+        var result = await Pick(AllValues(), (keys, feedback) =>
+        {
+            Assert.Equal("close", feedback.Picker.ViewModel.EscapeHint);
+            return Press(keys, VkEscape);
+        });
+        Assert.Equal(PickOutcome.Dismissed, result.Outcome);
+    }
+
+    [Fact]
+    public async Task KeysTypedRightAfterEnterGoToTheApp()
+    {
+        var result = await Pick(AllValues(), (keys, _) =>
+        {
+            // Enter, then "ab" before the UI thread has handled Enter: the letters must reach the app, not vanish.
+            Assert.Equal([true, false, false], keys.PressQuickly(Stroke(VkReturn), Stroke(0x41, 'a'), Stroke(0x42, 'b')));
+            return Task.CompletedTask;
+        });
+        Assert.Equal("Jordan", result.Candidate!.Value);
+    }
+
+    [Fact]
+    public async Task KeysTypedRightAfterANumberOrEscapeGoToTheApp()
+    {
+        var chosen = await Pick(DocSample.NamePick(Anchor), (keys, _) =>
+        {
+            Assert.Equal([true, false], keys.PressQuickly(Stroke(0x32, '2'), Stroke(0x33, '3')));
+            return Task.CompletedTask;
+        });
+        Assert.Equal("Jordan", chosen.Candidate!.Value);
+
+        var original = await Pick(DocSample.NamePick(Anchor), (keys, _) =>
+        {
+            Assert.Equal([true, false], keys.PressQuickly(Stroke(VkEscape), Stroke(0x31, '1')));
+            return Task.CompletedTask;
+        });
+        Assert.Equal(PickOutcome.PasteOriginal, original.Outcome);
+    }
+
+    [Fact]
+    public async Task EnterOnAListThatAFilterJustEmptiedClosesThePicker()
+    {
+        var result = await Pick(AllValues(), (keys, _) =>
+        {
+            // The hook judged Enter by the full list; by the time it is handled, "zz" has filtered every row away.
+            Assert.Equal([true, true, true, false], keys.PressQuickly(Stroke(0x5A, 'z'), Stroke(0x5A, 'z'), Stroke(VkReturn), Stroke(0x41, 'a')));
+            return Task.CompletedTask;
+        });
+        Assert.Equal(PickOutcome.Dismissed, result.Outcome);
+    }
+
+    [Fact]
+    public async Task ANumberWithNoRowKeepsTakingKeys()
+    {
+        var result = await Pick(DocSample.NamePick(Anchor), (keys, _) =>
+        {
+            Assert.Equal([true, true], keys.PressQuickly(Stroke(0x37, '7'), Stroke(0x31, '1')));
+            return Task.CompletedTask;
+        });
+        Assert.Equal("Jordan Rivera", result.Candidate!.Value);
+    }
+
+    private static KeyStroke Stroke(int vk, char? c = null) => new(vk, c, KeyModifiers.None, IsRepeat: false);
 
     [Fact]
     public async Task AnyOtherKeyGoesToTheAppAndDismisses()
@@ -204,11 +275,11 @@ public sealed class PickerTests
             var firstPick = feedback.PickAsync(DocSample.NamePick(Anchor), CancellationToken.None);
             var secondPick = feedback.PickAsync(AllValues(), CancellationToken.None);
             var firstResult = await firstPick;
-            keys.Press(VkEscape);
+            keys.Press(0x31, '1');
             return (firstResult, await secondPick);
         });
         Assert.Equal(PickOutcome.Dismissed, first.Outcome);
-        Assert.Equal(PickOutcome.PasteOriginal, second.Outcome);
+        Assert.Equal(PickOutcome.Chosen, second.Outcome);
     }
 
     [Fact]

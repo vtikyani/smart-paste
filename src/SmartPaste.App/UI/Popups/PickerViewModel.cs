@@ -36,6 +36,10 @@ internal sealed partial class PickerViewModel : ObservableObject
     [ObservableProperty]
     public partial int SelectedIndex { get; private set; }
 
+    // What Escape does, for the footer: "paste original" after Ctrl+V, "close" for the picker shortcut.
+    [ObservableProperty]
+    public partial string EscapeHint { get; private set; } = "";
+
     public PickerRow? Selected => SelectedIndex >= 0 && SelectedIndex < Rows.Count ? Rows[SelectedIndex] : null;
 
     public void Load(PickRequest request)
@@ -51,6 +55,7 @@ internal sealed partial class PickerViewModel : ObservableObject
             : string.IsNullOrWhiteSpace(request.FieldLabel)
                 ? "Which one?"
                 : $"Which one for “{DisplayText.OneLine(request.FieldLabel, 40)}”?";
+        EscapeHint = IsFilterable ? "close" : "paste original";
         Filter = "";
         Apply();
     }
@@ -137,4 +142,6 @@ internal sealed partial class PickerRow : ObservableObject
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
+
+    public override string ToString() => SpokenText;
 }

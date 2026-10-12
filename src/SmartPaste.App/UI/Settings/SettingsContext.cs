@@ -31,7 +31,8 @@ internal sealed class SettingsContext
 
     public AppSettings Settings => Services.Settings.Current;
 
-    // Saves a settings change. When the file can't be written, says so and returns false.
+    // Saves a settings change. When the file can't be written, says so and returns false. The change is in effect
+    // either way (see SettingsStore.Update); it just may not last.
     public bool TrySave(Func<AppSettings, AppSettings> change) => TrySave(() => Services.Settings.Update(change));
 
     // Runs an action that saves settings (AppController's, for example), with the same error handling.
@@ -46,7 +47,7 @@ internal sealed class SettingsContext
         {
             // SettingsStore has logged it already.
             Notice.Show(InfoBarSeverity.Error, "Couldn't save your change",
-                "Smart Paste couldn't write its settings file. Make sure your disk isn't full, then try again.");
+                "It works for now, but Smart Paste may forget it when it closes. Make sure your disk isn't full.");
             return false;
         }
     }

@@ -7,7 +7,11 @@ using SmartPaste.Core;
 namespace SmartPaste.App.UI.Settings.Pages;
 
 // One learned label: the field label as Smart Paste stores it, and the kind of value it means.
-internal sealed record LearnedLabelRow(string Label, string Kind);
+internal sealed record LearnedLabelRow(string Label, string Kind)
+{
+    // What a screen reader says for the row: "Given name: First name".
+    public override string ToString() => $"{Label}: {Kind}";
+}
 
 // The Learned labels page: what this PC has learned, with Forget and Forget all. Follows LabelCache live.
 internal sealed partial class LearnedLabelsViewModel : ObservableObject, IDisposable

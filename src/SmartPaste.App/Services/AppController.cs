@@ -30,11 +30,23 @@ internal sealed class AppController : IDisposable
     // Asks the app to shut down.
     public event EventHandler? ExitRequested;
 
+    // Raised on the UI thread when a change made through TryChange, or a pause running out, could not be written to
+    // disk. The change is in effect anyway; it may just not last until the next start.
+    public event EventHandler? SaveFailed;
+
+    // These three throw IOException or UnauthorizedAccessException when the settings file can't be written. The change
+    // is in effect anyway (see SettingsStore.Update). The settings window catches that and explains it in place;
+    // callers with no window of their own use TryChange.
     public void SetEnabled(bool enabled) => _settings.Update(s => s with { Enabled = enabled, PausedUntil = null });
 
     public void Pause(TimeSpan duration) => _settings.Update(s => s with { PausedUntil = DateTimeOffset.Now + duration });
 
     public void Resume() => _settings.Update(s => s with { Enabled = true, PausedUntil = null });
+
+    // Runs one of the changes above for a caller with no window to explain a failed save in: the tray menu, the
+    // flyout, the on/off shortcut. A failed save is logged and reported through SaveFailed instead of thrown. source
+    // names the caller in the log.
+    public void TryChange(Action<AppController> change, string source) => Guard(() => change(this), source);
 
     public void ClearProfile() => ClearRequested?.Invoke(this, EventArgs.Empty);
 
@@ -52,13 +64,28 @@ internal sealed class AppController : IDisposable
         State.PausedUntil = settings.IsPausedAt(DateTimeOffset.Now) ? settings.PausedUntil : null;
     }
 
-    private void Tick()
+    // Runs every 15 seconds on the UI thread. Internal so tests can run it without waiting.
+    internal void Tick()
     {
         var now = DateTimeOffset.Now;
         if (_settings.Current.PausedUntil is { } until && until <= now)
-            _settings.Update(s => s with { PausedUntil = null });
+            Guard(() => _settings.Update(s => s with { PausedUntil = null }), "pause_end");
         if (State.Armed is { } armed && armed.ExpiresAt <= now)
             ClearProfile();
+    }
+
+    private void Guard(Action save, string source)
+    {
+        try
+        {
+            save();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The store has logged the failure itself; this records what was being changed.
+            Log.Error("settings_change_unsaved", ex, ("source", source));
+            SaveFailed?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     public void Dispose()
