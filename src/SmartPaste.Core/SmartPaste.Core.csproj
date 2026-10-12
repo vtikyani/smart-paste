@@ -1,13 +1,16 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
+  <!-- Platform-neutral logic: parsing, field decisions, formatting, privacy rules. No Windows APIs here,
+       so it builds and tests on any OS. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <ItemGroup>
     <EmbeddedResource Include="seed-labels.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartPaste.Core.Tests" />
   </ItemGroup>
 </Project>

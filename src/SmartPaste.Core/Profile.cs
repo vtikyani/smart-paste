@@ -12,6 +12,22 @@ public static class FieldKeys
         FirstName, MiddleName, LastName, FullName, Street, Unit, City, State, Zip, Country,
         Email, Phone, Company, Title, DateOfBirth, Website, Linkedin
     });
+
+    private static readonly Dictionary<string, string> DisplayNames = new(StringComparer.Ordinal)
+    {
+        [FirstName] = "First name", [MiddleName] = "Middle name", [LastName] = "Last name", [FullName] = "Full name",
+        [Street] = "Street", [Unit] = "Apt / unit", [City] = "City", [State] = "State", [Zip] = "ZIP / postal code",
+        [Country] = "Country", [Email] = "Email", [Phone] = "Phone", [Company] = "Company", [Title] = "Job title",
+        [DateOfBirth] = "Date of birth", [Website] = "Website", [Linkedin] = "LinkedIn"
+    };
+
+    // A name people can read: "First name" for standard keys, "Favorite color" for an extra key like favorite_color.
+    public static string DisplayName(string key)
+    {
+        if (DisplayNames.TryGetValue(key, out var name)) return name;
+        var words = key.Replace('_', ' ').Replace('-', ' ').Trim();
+        return words.Length == 0 ? key : char.ToUpperInvariant(words[0]) + words[1..];
+    }
 }
 
 public sealed record Entity(string Label, IReadOnlyDictionary<string, string> Fields);

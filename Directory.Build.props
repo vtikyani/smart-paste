@@ -1,0 +1,32 @@
+<Project>
+  <!-- Settings shared by every project in the repo. -->
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <!-- Product metadata. The release workflow overrides Version from the git tag. -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Product>Smart Paste</Product>
+    <Company>Smart Paste contributors</Company>
+    <Authors>Smart Paste contributors</Authors>
+    <Copyright>Copyright (c) 2026 Smart Paste contributors</Copyright>
+    <RepositoryUrl>https://github.com/vtikyani/smart-paste</RepositoryUrl>
+    <PackageProjectUrl>$(RepositoryUrl)</PackageProjectUrl>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <NeutralLanguage>en-US</NeutralLanguage>
+  </PropertyGroup>
+
+  <!-- Binaries and their embedded debug info must never carry the build machine's folder names
+       (which include the developer's user name). Map the repo root to a neutral path. -->
+  <PropertyGroup>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))</RepoRoot>
+    <PathMap>$(RepoRoot)=/_/</PathMap>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+</Project>

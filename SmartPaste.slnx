@@ -4,6 +4,7 @@
     <Project Path="src/SmartPaste.Core/SmartPaste.Core.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/SmartPaste.App.Tests/SmartPaste.App.Tests.csproj" />
     <Project Path="tests/SmartPaste.Core.Tests/SmartPaste.Core.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

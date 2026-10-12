@@ -1,11 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Developer tool: runs parsing and Jev decisions against the real APIs. Never shipped. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
   </PropertyGroup>
+
   <ItemGroup>
-    <ProjectReference Include="../../src/SmartPaste.Core/SmartPaste.Core.csproj" />
+    <ProjectReference Include="..\..\src\SmartPaste.Core\SmartPaste.Core.csproj" />
   </ItemGroup>
 </Project>

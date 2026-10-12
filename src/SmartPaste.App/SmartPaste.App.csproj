@@ -1,32 +1,43 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Windows tray app. WPF for the UI; the Windows 10 2004 SDK projection for the built-in OCR engine
+       (Windows.Media.Ocr). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>SmartPaste</AssemblyName>
+    <RootNamespace>SmartPaste.App</RootNamespace>
+    <StartupObject>SmartPaste.App.Program</StartupObject>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
+    <SelfContained>false</SelfContained>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\SmartPaste.Core\SmartPaste.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Interop.UIAutomationClient" Version="10.19041.0" />
-    <PackageReference Include="PaddleOcrNet" Version="2.2.1" />
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="H.NotifyIcon.Wpf" />
+    <PackageReference Include="Interop.UIAutomationClient" />
+    <PackageReference Include="Velopack" />
+    <PackageReference Include="WPF-UI" />
   </ItemGroup>
 
-  <PropertyGroup>
-    <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
-    <Nullable>enable</Nullable>
-    <UseWindowsForms>true</UseWindowsForms>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <SelfContained>false</SelfContained>
-    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
-  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SmartPaste.App.Tests" />
+    <!-- WPF projects leave System.IO out of the implicit usings (it clashes with System.Windows.Shapes.Path). -->
+    <Using Include="System.IO" />
+  </ItemGroup>
 
-  <!-- PaddleOcrNet ships PDFium for PDF input; we only OCR images. Image OCR verified working with
-       pdfium removed (2026-10-01, Mac probe). Dropping it keeps the zip under 9 MB. -->
-  <Target Name="DropUnusedNatives" AfterTargets="Publish">
-    <Delete Files="$(PublishDir)pdfium.dll;$(PublishDir)onnxruntime.lib;$(PublishDir)onnxruntime_providers_shared.lib" />
-  </Target>
+  <!-- Program.Main starts the app (Velopack must run first), so App.xaml must not generate a Main of its own. -->
+  <ItemGroup>
+    <ApplicationDefinition Remove="App.xaml" />
+    <Page Include="App.xaml" />
+  </ItemGroup>
 
 </Project>

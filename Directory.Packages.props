@@ -1,0 +1,21 @@
+<Project>
+  <!-- Every package version lives here (central package management). Projects list packages without versions. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+
+  <ItemGroup Label="App">
+    <PackageVersion Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageVersion Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <PackageVersion Include="Interop.UIAutomationClient" Version="10.19041.0" />
+    <PackageVersion Include="Velopack" Version="1.2.161" />
+    <PackageVersion Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+
+  <ItemGroup Label="Tests">
+    <PackageVersion Include="coverlet.collector" Version="6.0.4" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
+  </ItemGroup>
+</Project>

@@ -2,9 +2,15 @@ using System.Text.Json;
 
 namespace SmartPaste.Core;
 
+public sealed record LearnedLabel(string Label, string Key);
+
+// Field label -> profile key. Two layers: the built-in seed list (shipped with the app) and labels learned on
+// this PC (from confident Jev decisions and from the user's picks). Learned labels win over the seed.
+// Thread-safe: the paste path, the focus prefetcher, and the settings page all use one instance.
 public sealed class LabelCache
 {
-    private readonly Dictionary<string, string> _labels = new(StringComparer.Ordinal);
+    private readonly object _gate = new();
+    private readonly Dictionary<string, string> _seed = new(StringComparer.Ordinal);
     // Only learned labels are persisted, so a newer seed is never shadowed by an old copy of itself.
     private readonly Dictionary<string, string> _learned = new(StringComparer.Ordinal);
     private readonly string? _userFilePath;
@@ -18,7 +24,7 @@ public sealed class LabelCache
         {
             using var stream = typeof(LabelCache).Assembly.GetManifestResourceStream("SmartPaste.Core.seed-labels.json")
                 ?? throw new InvalidOperationException("Embedded seed labels missing.");
-            Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(stream));
+            Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(stream), _seed);
         }
         if (userFilePath is not null)
         {
@@ -29,20 +35,75 @@ public sealed class LabelCache
         }
     }
 
-    public static LabelCache Empty() => new(null, false);
-    public int Count => _labels.Count;
+    // Raised (on the thread that made the change) after a label is learned or forgotten.
+    public event EventHandler? Changed;
 
-    public bool TryGet(string normalizedLabel, out string key) => _labels.TryGetValue(LabelNormalizer.Normalize(normalizedLabel), out key!);
+    public static LabelCache Empty() => new(null, false);
+
+    public int Count
+    {
+        get { lock (_gate) return _seed.Keys.Union(_learned.Keys).Count(); }
+    }
+
+    // Labels learned on this PC, sorted by label.
+    public IReadOnlyList<LearnedLabel> Learned
+    {
+        get
+        {
+            lock (_gate)
+                return _learned.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => new LearnedLabel(p.Key, p.Value)).ToArray();
+        }
+    }
+
+    public bool TryGet(string normalizedLabel, out string key)
+    {
+        var label = LabelNormalizer.Normalize(normalizedLabel);
+        lock (_gate)
+            return _learned.TryGetValue(label, out key!) || _seed.TryGetValue(label, out key!);
+    }
 
     // Never throws: a cache write failing must not cost the user the paste it was learned from.
     public void Set(string normalizedLabel, string key)
     {
         var label = LabelNormalizer.Normalize(normalizedLabel);
         if (label.Length == 0 || !FieldKeys.Standard.Contains(key)) return;
-        _labels[label] = key;
-        _learned[label] = key;
-        if (_userFilePath is null) return;
+        lock (_gate)
+        {
+            if (_learned.TryGetValue(label, out var existing) && existing == key) return;
+            _learned[label] = key;
+            Persist();
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 
+    // Removes a learned label. A label that is also in the seed list goes back to its built-in meaning.
+    public bool Forget(string label)
+    {
+        bool removed;
+        lock (_gate)
+        {
+            removed = _learned.Remove(LabelNormalizer.Normalize(label));
+            if (removed) Persist();
+        }
+        if (removed) Changed?.Invoke(this, EventArgs.Empty);
+        return removed;
+    }
+
+    public void ForgetAll()
+    {
+        lock (_gate)
+        {
+            if (_learned.Count == 0) return;
+            _learned.Clear();
+            Persist();
+        }
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    // Caller holds _gate. Writes to a temp file and renames, so a crash mid-write never corrupts the file.
+    private void Persist()
+    {
+        if (_userFilePath is null) return;
         string? temp = null;
         try
         {
@@ -56,15 +117,14 @@ public sealed class LabelCache
         finally { try { if (temp is not null && File.Exists(temp)) File.Delete(temp); } catch (IOException) { } }
     }
 
-    private void Overlay(Dictionary<string, string>? entries, Dictionary<string, string>? learned = null)
+    private static void Overlay(Dictionary<string, string>? entries, Dictionary<string, string> target)
     {
         if (entries is null) return;
         foreach (var (label, key) in entries)
             if (FieldKeys.Standard.Contains(key))
             {
                 var normalized = LabelNormalizer.Normalize(label);
-                _labels[normalized] = key;
-                if (learned is not null) learned[normalized] = key;
+                if (normalized.Length > 0) target[normalized] = key;
             }
     }
 }

@@ -1,7 +1,10 @@
 namespace SmartPaste.Core;
 
 public enum DecisionKind { Value, Picker, PlainPaste }
-public sealed record Candidate(string Key, string EntityLabel, string Value);
+public sealed record Candidate(string Key, string EntityLabel, string Value)
+{
+    public string KeyDisplayName => FieldKeys.DisplayName(Key);
+}
 public sealed record Decision(DecisionKind Kind, string? Key, string? Value, IReadOnlyList<Candidate> Candidates, string Source, string Reason);
 public sealed class FieldDecider
 {

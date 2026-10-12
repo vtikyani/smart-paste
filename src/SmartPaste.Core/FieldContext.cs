@@ -4,6 +4,16 @@ public sealed record FieldContext(
     string? Name, string? HelpText, string? AutomationId, string? LabeledBy, string? ControlType,
     bool IsPassword, IReadOnlyList<string> Siblings, string? OcrText = null, int? MaxLength = null)
 {
+    // Placeholder text shown inside the empty field, when the app exposes it separately from the help text.
+    public string? Placeholder { get; init; }
+
+    // Names of the groups or headings the field sits under, nearest first ("Shipping address", "Contact").
+    // Never used as the label itself; it is context for telling billing from shipping and the like.
+    public IReadOnlyList<string> Sections { get; init; } = [];
+
+    // Executable name of the app that owns the field, for example "chrome.exe".
+    public string? AppName { get; init; }
+
     public string BestLabel()
     {
         foreach (var item in new[] { LabeledBy, Name, HelpText, LabelNormalizer.Humanize(AutomationId ?? ""),
