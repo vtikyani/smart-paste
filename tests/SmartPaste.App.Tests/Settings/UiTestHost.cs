@@ -55,9 +55,14 @@ internal static class UiTestHost
         await Dispatcher.Yield(DispatcherPriority.ContextIdle);
     }
 
+    // README pictures show Windows' default accent, not whatever accent the machine running the tests uses.
+    private static readonly Color WindowsDefaultAccent = Color.FromRgb(0x00, 0x78, 0xD4);
+
     public static void UseTheme(ApplicationTheme theme)
     {
         ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: true);
+        if (Environment.GetEnvironmentVariable(ReadmeFolderVariable) is { Length: > 0 })
+            ApplicationAccentColorManager.Apply(WindowsDefaultAccent, theme);
         var dictionaries = Application.Current.Resources.MergedDictionaries;
         var brand = dictionaries.FirstOrDefault(d =>
             d.Source?.OriginalString.EndsWith("Brand.Dark.xaml", StringComparison.OrdinalIgnoreCase) == true ||
