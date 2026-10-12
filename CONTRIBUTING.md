@@ -60,17 +60,24 @@ Two things to know:
 ## Try parsing and Jev against the real services
 
 `tools/SmartPaste.LiveRun` sends a built-in sample contact (not your data) to OpenRouter and Jev, and prints what
-comes back and how long it took. It reads keys from the `OPENROUTER_API_KEY` (required) and `TYPESAFE_API_KEY`
-environment variables:
+comes back and how long it took. It reads keys from the `OPENROUTER_API_KEY` and `TYPESAFE_API_KEY` environment
+variables. Both are optional: with only a TypeSafe key it skips the parsing model, and with no key it shows what the
+offline fallback decides.
 
 ```powershell
 $env:OPENROUTER_API_KEY = "<your OpenRouter key>"
 dotnet run --project tools/SmartPaste.LiveRun
 ```
 
-It can also read keys from the `env` object of a JSON file passed with `--keys <file>`. Add `--fixture` to also check
-the form-label fixture (`tests/SmartPaste.Core.Tests/fixtures/form-labels.json`) with the local rules and Jev, and
-print the pass rate. Run it from the repository root.
+Options (after `--`, as in `dotnet run --project tools/SmartPaste.LiveRun -- --fixture`):
+
+- `--keys <file>` reads keys from a JSON file, as top-level properties or in an `env` object, with the same names.
+- `--route auto|typesafe|openrouter` picks how Jev is reached (Automatic by default).
+- `--model <id>` tries another OpenRouter parsing model.
+- `--fixture` also checks the form-label fixtures in `tests/SmartPaste.Core.Tests/fixtures` (`form-labels.json` and
+  `form-labels-regression.json`) with Jev and the local rules, and prints the pass rate.
+
+Run it from the repository root.
 
 ## End-to-end tests
 
@@ -78,11 +85,24 @@ print the pass rate. Run it from the repository root.
 clipboard. CI does not run it. Run it by hand after you change the keyboard hook, the clipboard code, UI Automation,
 or the paste flow, and before each release:
 
-1. Use a desktop you can leave alone for a few minutes. Close other apps.
+1. Use an unlocked desktop you can leave alone for a few minutes. Close other apps.
 2. Pause or quit your installed Smart Paste.
-3. Run `dotnet test tests/SmartPaste.E2E`, and don't touch the keyboard or mouse until it finishes.
+3. Build the app, then run the tests, and don't touch the keyboard or mouse until they finish:
 
-The tests run Smart Paste with its own data folder, so your settings and learned labels stay as they are.
+   ```powershell
+   dotnet build src/SmartPaste.App
+   dotnet run --project tests/SmartPaste.E2E
+   ```
+
+It is a console app, not a `dotnet test` project, so `dotnet test` skips it. Options (after `--`):
+
+- `--only wpf`, `--only win32`, or `--only edge` runs one of the three test forms.
+- `--app <path>` tests another `SmartPaste.exe`. By default it tests the Debug build from step 3.
+
+The tests run Smart Paste with its own data folder, so your settings and learned labels stay as they are. They back
+up your clipboard first and put it back at the end. Your saved keys are shared, though (see above): with a key saved,
+the app under test sends the tests' made-up contact details to OpenRouter and Jev. The Edge test needs Microsoft
+Edge; it runs with a fresh, temporary profile.
 
 ## How we write code
 
@@ -105,14 +125,15 @@ These are hard rules. A pull request that breaks one is not merged.
 
 - The log holds event names, allow-listed field names, numbers, and short tokens. Never clipboard text, values, field
   labels, or exception messages. `Log` enforces this; don't work around it.
-- Copied text goes to the parsing model only when it looks like contact details. The field description and trimmed
-  values go to Jev. Nothing else leaves the PC. A new network call that carries user data needs a change to
+- Copied text goes to the parsing model only when it looks like contact details (`TextHeuristics.LooksMultiField`),
+  and only after `Redaction` takes its secrets out. The field description and the block's values (each cut to 60
+  characters) go to Jev. Nothing else leaves the PC. A new network call that carries user data needs a change to
   [PRIVACY.md](PRIVACY.md) in the same pull request.
 - When Smart Paste is off or paused, it watches nothing and makes no calls with user data.
 - API keys live in Windows Credential Manager, never in files, logs, or settings.
 - The copied block lives in memory only, and expires.
-- Sensitive fields (passwords, card numbers, security codes, social security numbers, one-time codes) never get a
-  smart paste and are never described to Jev.
+- Sensitive fields (passwords and PINs, card and bank details, ID numbers, one-time codes, security questions; see
+  `KeywordRules.IsSensitive`) never get a smart paste and are never described to Jev.
 
 ## Dependencies
 

@@ -30,7 +30,9 @@ Problems in this repository's code and in the release files built from it. For e
   describes.
 - API keys leaving Windows Credential Manager, or going anywhere but their own service.
 - Smart Paste acting where it promises not to: password and other sensitive fields, admin windows, Remote Desktop,
-  terminals, password managers, or private copies.
+  Hyper-V, terminals, password managers, private copies, or copies made in an app it skips.
+- A secret in copied text (a password, a card or social security number) reaching the parsing model, when
+  [PRIVACY.md](PRIVACY.md) says it is taken out first.
 - Crafted clipboard content, field labels, or web pages that make Smart Paste run code, crash in a way an attacker
   controls, or paste into the wrong place.
 - The update or install path accepting files that are not the official release files.

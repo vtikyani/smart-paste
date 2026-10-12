@@ -9,8 +9,9 @@ namespace SmartPaste.App.Services;
 
 // What happens on a copy. Any new copy disarms the previous block at once. Text that looks like several contact
 // details is read on this PC first (LocalExtractor), so Ctrl+V works within milliseconds even offline; then, with an
-// OpenRouter key, the parsing model reads it and the richer result replaces the local one. A copied screenshot (only
-// with "Read screenshots" on) is turned into text by Windows OCR on this PC and continues the same way.
+// OpenRouter key, the parsing model reads it (secrets taken out first) and the richer result replaces the local one. A
+// copied screenshot (only with "Read text from screenshots" on) is turned into text by Windows OCR on this PC and
+// continues the same way.
 internal sealed class CopyPipeline : IDisposable
 {
     private readonly ClipboardWatcher _watcher;

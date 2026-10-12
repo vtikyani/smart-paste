@@ -89,23 +89,37 @@ a file.
 | --- | --- |
 | **Ctrl+V** | While a copied block is ready: pastes the value this field wants. Otherwise: a normal paste. |
 | **Ctrl+Shift+V** | Smart Paste never handles it, so the app pastes your clipboard as usual. |
-| **Win+Alt+V** | Opens a picker with every value you copied. You can change this shortcut in Settings. |
-| **Esc** (in a picker) | Closes the picker and pastes your original clipboard instead. |
+| **Win+Alt+V** | Opens a picker with every value you copied. If nothing is ready, a short note says so. You can change this shortcut in Settings. |
 | Your choice | Turns Smart Paste on or off. There is none until you set one in Settings. |
+
+### In a picker
+
+A picker opens next to the field when Jev is unsure, or when you press Win+Alt+V. It never takes the focus from the
+app you're typing in.
+
+| Keys | What it does |
+| --- | --- |
+| **1** to **9** | Pastes that row. |
+| **Up** or **Down**, then **Enter** | Pastes the row you moved to. A click on a row works too. |
+| Typing | In the Win+Alt+V picker: filters the list. **Backspace**, **Page Up**, **Page Down**, **Home**, and **End** work there too. |
+| **Esc** | In a picker that Ctrl+V opened: pastes your clipboard as it is. In the Win+Alt+V picker: just closes it. |
+| Anything else | Any other key, or a click outside the picker, closes it without pasting. The key reaches your app as usual. |
+
+A picker also closes by itself after 20 seconds without a key press.
 
 ## Privacy
 
 Smart Paste is built to keep what you copy on your PC.
 
 - **No key:** nothing you copy leaves your PC.
-- **With a key:** copied text that looks like contact details goes to OpenRouter to be read. While a copied block is
-  ready and you click into a field, the field's label and the text around it go to Jev, with your copied values cut
-  short. Nothing else you copy leaves your PC.
+- **With a key:** copied text that looks like contact details goes to OpenRouter to be read. Secrets like passwords
+  and card numbers are taken out first. While a copied block is ready and you click into a field, Jev gets a
+  description of the field, the app's name, and your copied values. Nothing else you copy leaves your PC.
 - **No telemetry.** Smart Paste does not track how you use it.
 - **Memory only.** The copied block stays in memory and is forgotten after 15 minutes (you can change this).
 - **Logs never contain** what you copied, what was pasted, or field labels.
-- **Never touches** password fields, card numbers, security codes, social security numbers, one-time codes, admin
-  windows, Remote Desktop, terminals, or password managers.
+- **Never touches** password fields; fields for card numbers, security codes, bank details, ID numbers, one-time
+  codes, or security questions; admin windows; Remote Desktop; Hyper-V; terminals; or password managers.
 - **Uninstall removes everything:** keys, settings, learned labels, and logs.
 
 The full details are in [PRIVACY.md](PRIVACY.md).
@@ -117,17 +131,23 @@ The full details are in [PRIVACY.md](PRIVACY.md).
 Smart Paste only steps in when all of these are true:
 
 - It is on and not paused.
-- The copied text looks like contact details: at least two kinds, like an email address and a phone number.
+- The copied text looks like contact details. That means at least two kinds of them: an email address, a phone
+  number, a street address, a ZIP or postal code next to its city, or lines labeled like "Name:" or "Phone:". Links
+  and dates don't count.
 - The block was copied less than 15 minutes ago, and you have not copied anything else since.
 - You are pasting into a text box or a drop-down you can type in.
 - The app is not one it skips (see below), and you have not excluded it in Settings.
+
+Even then, Jev may decide that none of your values belongs in the field, for example when it asks for an emergency
+contact's phone. Then Ctrl+V pastes normally.
 
 The tray icon shows when a copied block is ready.
 
 ### A field got the wrong value
 
-Press **Ctrl+Z** to undo it. Then press **Win+Alt+V** and pick the right value. Smart Paste learns from the values
-you pick. If a learned label is wrong, remove it on the **Learned labels** page in Settings.
+Press **Ctrl+Z** to undo it. Then press **Win+Alt+V** and pick the right value. Smart Paste remembers that field's
+label on your PC and uses it when Jev can't be reached. If a learned label is wrong, remove it on the **Learned
+labels** page in Settings.
 
 ### Does it work offline?
 
@@ -136,14 +156,24 @@ labels it learned. Jev and the cloud reader add better choices when you are onli
 
 ### Which apps does it skip?
 
-Admin windows (apps you ran as administrator), Remote Desktop, terminals, password managers, and any app you exclude
-in Settings. In those, Ctrl+V works the normal way. Smart Paste also never fills password fields or fields for card
-numbers, security codes, social security numbers, or one-time codes.
+Admin windows (apps you ran as administrator), Remote Desktop, Hyper-V, terminals, password managers, and any app you
+exclude in Settings. In those, Ctrl+V works the normal way. Smart Paste also ignores what you copy in Remote Desktop,
+Hyper-V, password managers, and apps you exclude. The **Privacy** page in Settings lists every app it skips.
+
+Smart Paste never fills password fields, or fields for card numbers, security codes, bank details, ID numbers,
+one-time codes, or security questions.
 
 ### Where are the logs?
 
-In `%LOCALAPPDATA%\SmartPaste\logs`. Paste that path into File Explorer's address bar. The logs record events and
-timings, never what you copied. They are deleted after 14 days. Attaching a few lines to a bug report helps a lot.
+In `%LOCALAPPDATA%\SmartPaste\logs`, or click **Open log folder** on the **Privacy** page in Settings. The logs record
+events and timings, never what you copied. Each time Smart Paste starts, it deletes logs older than 14 days.
+Attaching a few lines to a bug report helps a lot.
+
+### Can a script close Smart Paste?
+
+Yes. Run `SmartPaste.exe --exit`. It closes the running copy the normal way, so your clipboard is put back first.
+`SmartPaste.exe` is in the `current` folder of the install folder (`%LOCALAPPDATA%\SmartPaste.App\current`), or of
+the portable folder.
 
 ### How do I uninstall it?
 

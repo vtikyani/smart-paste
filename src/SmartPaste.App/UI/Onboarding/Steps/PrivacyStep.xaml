@@ -49,7 +49,7 @@
         </Border>
         <StackPanel Grid.Column="1" Margin="14,0,0,0">
           <TextBlock Style="{StaticResource Onboarding.ItemTitle}" Text="Only what a paste needs" />
-          <TextBlock Style="{StaticResource Onboarding.ItemText}" Text="With a key, contact details you copy go to OpenRouter to be read. When you paste, Jev gets the field's details, the app's name, and your copied values." />
+          <TextBlock Style="{StaticResource Onboarding.ItemText}" Text="With a key, contact details you copy go to OpenRouter to be read, with secrets like passwords taken out. When you paste, Jev gets the field's details, the app's name, and your copied values." />
         </StackPanel>
       </Grid>
 

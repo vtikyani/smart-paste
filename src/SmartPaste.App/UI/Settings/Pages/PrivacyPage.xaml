@@ -59,7 +59,7 @@
           </Border>
           <StackPanel Grid.Column="1" Margin="16,0,0,0">
             <TextBlock FontWeight="SemiBold" Style="{StaticResource Settings.CardTitle}" Text="When you copy contact details" />
-            <TextBlock Style="{StaticResource Settings.Prose}" Text="If an OpenRouter key is saved, text you copy that looks like contact details goes to OpenRouter, where the parsing model reads it. Other copies are never sent." />
+            <TextBlock Style="{StaticResource Settings.Prose}" Text="If an OpenRouter key is saved, text you copy that looks like contact details goes to OpenRouter, where the parsing model reads it. Secrets such as passwords and card numbers are taken out first. Other copies are never sent." />
           </StackPanel>
         </Grid>
         <Grid Margin="20,0,20,0">

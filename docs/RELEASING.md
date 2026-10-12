@@ -7,25 +7,27 @@ check.
 ## Cut a release
 
 1. **Check `main` is green.** CI must pass on the commit you will release.
-2. **Write the release notes.** In `CHANGELOG.md`, rename `## [Unreleased]` to the new version and today's date,
+2. **Run the end-to-end tests** on a real desktop, as [CONTRIBUTING.md](../CONTRIBUTING.md#end-to-end-tests)
+   describes. CI can't run them, and they cover the keyboard hook, the clipboard, and pasting into real forms.
+3. **Write the release notes.** In `CHANGELOG.md`, rename `## [Unreleased]` to the new version and today's date,
    for example `## [1.2.0] - 2026-11-03`. Add a new, empty `## [Unreleased]` above it, and update the links at the
-   bottom. These notes become the text of the GitHub release and of the in-app update prompt, so write them for
-   users.
-3. **Set the version.** Put the same version in `<Version>` in `Directory.Build.props`, so local builds match.
-4. **Merge** that change to `main` and wait for CI.
-5. **Tag and push** that commit:
+   bottom. These notes become the text of the GitHub release, and Smart Paste shows them on its About page when the
+   update is ready to install. So write them for users.
+4. **Set the version.** Put the same version in `<Version>` in `Directory.Build.props`, so local builds match.
+5. **Merge** that change to `main` and wait for CI.
+6. **Tag and push** that commit:
 
    ```powershell
    git tag v1.2.0
    git push origin v1.2.0
    ```
 
-6. **Watch the run** under Actions > Release. It:
+7. **Watch the run** under Actions > Release. It:
    - reads the version from the tag (`v1.2.0` becomes `1.2.0`) and stops if `CHANGELOG.md` has no section for it;
    - downloads the previous release, so it can build delta updates (small downloads with only the changed bytes);
-   - runs `build/publish.ps1`: every test, then publish and pack for `win-x64` and `win-arm64`;
+   - runs `build/publish.ps1`: the unit tests, then publish and pack for `win-x64` and `win-arm64`;
    - uploads the x64 files as a draft release named "Smart Paste 1.2.0", then adds the arm64 files and publishes it.
-7. **Check the release page.** Each architecture has a `Setup.exe`, a `Portable.zip`, a full package, a delta package
+8. **Check the release page.** Each architecture has a `Setup.exe`, a `Portable.zip`, a full package, a delta package
    (from the second release on), and a `releases.win-*.json` feed that installed copies read.
 
 ### Version numbers
