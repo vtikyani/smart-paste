@@ -1,7 +1,6 @@
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
-using System.Windows;
 using System.Windows.Threading;
 using SmartPaste.App.Infrastructure;
 using SmartPaste.App.Services;
@@ -17,9 +16,9 @@ namespace SmartPaste.App;
 // settings (on, off, paused, shortcuts, exclusions), and tears them down in reverse order on exit.
 internal sealed class AppHost : IDisposable
 {
-    private readonly Application _application;
     private readonly SingleInstance _instance;
     private readonly Dispatcher _dispatcher;
+    private readonly Action _requestExit;
     private readonly HttpClient _http;
     private readonly LabelCache _labels;
     private readonly ClipboardWatcher _watcher;
@@ -42,39 +41,48 @@ internal sealed class AppHost : IDisposable
     private bool? _active;
     private bool _disposed;
 
-    public AppHost(Application application, SingleInstance instance)
+    // dispatcher: the UI thread's. requestExit: asks the app to exit (from any thread); the app then disposes this.
+    public AppHost(Dispatcher dispatcher, SingleInstance instance, Action requestExit)
     {
-        _application = application;
+        _dispatcher = dispatcher;
         _instance = instance;
-        _dispatcher = application.Dispatcher;
+        _requestExit = requestExit;
+        try
+        {
+            Settings = new SettingsStore(AppPaths.SettingsFile);
+            State = new AppState();
+            Controller = new AppController(State, Settings, _dispatcher);
+            _http = CreateHttpClient();
+            _labels = new LabelCache(AppPaths.LabelCacheFile);
 
-        Settings = new SettingsStore(AppPaths.SettingsFile);
-        State = new AppState();
-        Controller = new AppController(State, Settings, _dispatcher);
-        _http = CreateHttpClient();
-        _labels = new LabelCache(AppPaths.LabelCacheFile);
+            _watcher = new ClipboardWatcher();
+            _paster = new ClipboardPaster(_watcher);
+            _hook = new KeyboardHook(_dispatcher);
+            _hotkeys = new HotkeyManager();
+            _shortcuts = new ShortcutSync((name, hotkey) => _hotkeys.Set(name, hotkey));
+            _focus = new FocusInspector(_dispatcher);
+            _gate = new InterceptGate();
+            _ocr = new WindowsOcr();
 
-        _watcher = new ClipboardWatcher();
-        _paster = new ClipboardPaster(_watcher);
-        _hook = new KeyboardHook(_dispatcher);
-        _hotkeys = new HotkeyManager();
-        _shortcuts = new ShortcutSync((name, hotkey) => _hotkeys.Set(name, hotkey));
-        _focus = new FocusInspector(_dispatcher);
-        _gate = new InterceptGate();
-        _ocr = new WindowsOcr();
+            _profiles = new ProfileStore(State, Settings, _dispatcher);
+            _decisions = new DecisionService(_http, _labels, Settings, State, _dispatcher);
+            _copies = new CopyPipeline(_watcher, _profiles, Settings, State, _http, _ocr, _dispatcher);
+            _updates = new UpdateService(Controller.Exit);
+            _updateChecks = new UpdateScheduler(_updates, Settings, State, _dispatcher);
 
-        _profiles = new ProfileStore(State, Settings, _dispatcher);
-        _decisions = new DecisionService(_http, _labels, Settings, State, _dispatcher);
-        _copies = new CopyPipeline(_watcher, _profiles, Settings, State, _http, _ocr, _dispatcher);
-        _updates = new UpdateService(Controller.Exit);
-        _updateChecks = new UpdateScheduler(_updates, Settings, State, _dispatcher);
-
-        _navigator = new WindowNavigator(new UiServices(State, Controller, Settings, _labels, new ConnectionTester(_http),
-            _updates, new PracticeEngine(_http, _decisions, Settings), _hotkeys, InterceptGate.BuiltInBlockedApps));
-        _ui = new UiShell(State, Controller, Settings, _navigator, _hook);
-        _prefetch = new FocusPrefetcher(_focus, _gate, _ocr, _decisions, _profiles, Settings, _ui.PasteFeedback, _dispatcher);
-        _pastes = new SmartPasteService(_hook, _hotkeys, _gate, _focus, _paster, _profiles, _decisions, _prefetch,
-            _ui.PasteFeedback, Settings, State, _dispatcher);
+            _navigator = new WindowNavigator(new UiServices(State, Controller, Settings, _labels, new ConnectionTester(_http),
+                _updates, new PracticeEngine(_http, _decisions, Settings), _hotkeys, InterceptGate.BuiltInBlockedApps));
+            _ui = new UiShell(State, Controller, Settings, _navigator, _hook);
+            _prefetch = new FocusPrefetcher(_focus, _gate, _ocr, _decisions, _profiles, Settings, _ui.PasteFeedback, _dispatcher);
+            _pastes = new SmartPasteService(_hook, _hotkeys, _gate, _focus, _paster, _profiles, _decisions, _prefetch,
+                _ui.PasteFeedback, Settings, State, _dispatcher);
+        }
+        catch
+        {
+            // Nobody else can dispose a host that never finished building: put back what was set up so far.
+            Dispose();
+            throw;
+        }
     }
 
     public SettingsStore Settings { get; }
@@ -90,11 +98,16 @@ internal sealed class AppHost : IDisposable
         ApplyStartAtLogin(Settings.Current.StartAtLogin);
 
         Controller.ClearRequested += (_, _) => _profiles.Clear();
-        Controller.ExitRequested += (_, _) => _application.Shutdown();
+        // The tray's Exit, and the updater handing over to the new version.
+        Controller.ExitRequested += (_, _) => _requestExit();
         Settings.Changed += OnSettingsChanged;
         _hotkeys.Pressed += OnHotkey;
         HotkeyBox.RecordingChanged += OnRecordingChanged;
-        _instance.OnActivationRequested(() => _dispatcher.BeginInvoke(() => _navigator.ShowSettings()));
+        _instance.OnActivationRequested(() => _dispatcher.BeginInvoke(() =>
+        {
+            // A second start while this copy is exiting must not open a window.
+            if (!_disposed) _navigator.ShowSettings();
+        }));
 
         _ui.Start();
         Apply(Settings.Current, previous: null);
@@ -201,30 +214,31 @@ internal sealed class AppHost : IDisposable
         return http;
     }
 
+    // Also runs when the constructor fails part way; the pieces it never got to are still null then, and skipped.
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        Settings.Changed -= OnSettingsChanged;
-        _hotkeys.Pressed -= OnHotkey;
+        if (Settings is not null) Settings.Changed -= OnSettingsChanged;
+        if (_hotkeys is not null) _hotkeys.Pressed -= OnHotkey;
         // A static event: left subscribed, it would keep this host alive and call into it after exit.
         HotkeyBox.RecordingChanged -= OnRecordingChanged;
-        _pastes.Dispose();
-        _prefetch.Dispose();
-        _ui.Dispose();
-        _updateChecks.Dispose();
-        _copies.Dispose();
-        _decisions.Dispose();
+        _pastes?.Dispose();
+        _prefetch?.Dispose();
+        _ui?.Dispose();
+        _updateChecks?.Dispose();
+        _copies?.Dispose();
+        _decisions?.Dispose();
         // The hook goes before the clipboard pieces: it gives back any held keys first.
-        _hook.Dispose();
-        _hotkeys.Dispose();
-        _focus.Dispose();
+        _hook?.Dispose();
+        _hotkeys?.Dispose();
+        _focus?.Dispose();
         // Puts the user's clipboard back if Smart Paste exits in the middle of a paste.
-        _paster.Dispose();
-        _watcher.Dispose();
-        _profiles.Dispose();
-        _http.Dispose();
-        Controller.Dispose();
+        _paster?.Dispose();
+        _watcher?.Dispose();
+        _profiles?.Dispose();
+        _http?.Dispose();
+        Controller?.Dispose();
         Log.Event("app_exit");
     }
 }
