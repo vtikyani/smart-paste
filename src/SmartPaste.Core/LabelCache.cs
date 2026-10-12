@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SmartPaste.Core;
 
@@ -148,21 +149,130 @@ public sealed class LabelCache
     }
 }
 
-public static class KeywordRules
+// Rules over field labels: which fields are secret, which are about another person, and (for the offline fallback)
+// which profile key a label asks for. Terms are matched as whole words, so "pin" never matches "shipping".
+public static partial class KeywordRules
 {
-    // Fields that must never receive a profile value and never trigger a network call with profile data.
+    // Secret wherever they appear in a label: passwords and PINs, card and bank details, government and tax ids,
+    // one-time codes, security questions. The last word of a term may also take an "s" ("security questions").
+    // "PIN code" is also India's postal code; the PIN reading wins, which only costs that field a smart paste.
+    private static readonly string[] SecretTerms =
+    [
+        // Passwords, PINs, keys.
+        "password", "passcode", "passphrase", "passwd", "pwd", "pin", "secret", "security key", "private key", "api key",
+        "access token", "token",
+        // Card details. The word "card" alone is handled separately, so the name and billing address on a card stay usable.
+        "card number", "card no", "card num", "card nr", "card verification", "card security", "card code",
+        "cc number", "cc num", "cc no", "cc exp", "cc expiry", "cc expiration", "cc cvv", "cc cvc", "cc csc",
+        "cvv", "cvv2", "cvc", "cvc2", "cvn", "cvd", "csc", "cid", "cav2", "security code", "pan",
+        "expiration", "expiry", "expires", "exp date", "exp month", "exp year", "mm yy", "mmyy",
+        "valid thru", "valid through", "valid until", "good thru",
+        // Bank details.
+        "account number", "account no", "account num", "acct number", "acct no", "acct num", "bank account",
+        "checking account", "savings account", "routing", "aba", "sort code", "swift", "bic", "iban", "bsb",
+        "transit number", "institution number",
+        // Government and tax ids.
+        "ssn", "social security", "social insurance", "sin", "national insurance", "ni number", "nino", "national id",
+        "national identity", "national identification", "id number", "identification number", "identity number",
+        "government id", "tax id", "tax number", "tax identification", "taxpayer", "tin", "ein", "itin", "tfn",
+        "aadhaar", "nhs number", "passport", "visa number", "drivers license", "driver license", "drivers licence",
+        "driver licence", "driving license", "driving licence", "dl number", "license number", "licence number",
+        // One-time and verification codes.
+        "otp", "one time", "verification code", "verification number", "verify code", "confirmation code",
+        "auth code", "authentication code", "authorization code", "access code", "sms code", "recovery code",
+        "backup code", "digit code", "digit pin", "code we sent", "code we texted", "code we emailed", "code sent to",
+        "sent you a code", "texted you", "2fa", "mfa", "two factor", "2 factor", "two step", "2 step", "authenticator",
+        // Security questions.
+        "security question", "secret question", "challenge question", "security answer", "secret answer",
+        "memorable word", "memorable information", "maiden name", "first pet", "pets name", "childhood", "grew up",
+        "grow up", "first car", "first school", "elementary school", "were you born"
+    ];
+
+    // Secret only as the whole label: "Account #" is an account number, "Account email" is not.
+    private static readonly HashSet<string> SecretLabels = new(StringComparer.Ordinal)
+    {
+        "account", "acct", "exp", "dl", "ss", "verification"
+    };
+
+    // Ids written as one word ("cardnumber", "ccexp"): whole words.
+    private static readonly HashSet<string> SecretIdWords = new(StringComparer.Ordinal)
+    {
+        "cardnumber", "cardno", "cardnum", "creditcard", "debitcard", "ccnumber", "ccnum", "ccno", "ccexp", "cvvcode",
+        "securitycode", "expdate", "expirydate", "expirationdate", "expmonth", "expyear", "accountnumber", "accountno",
+        "acctnumber", "acctno", "routingnumber", "sortcode", "swiftcode", "bankaccount", "taxid", "taxpayerid",
+        "nationalid", "passportnumber", "passportno", "driverslicense", "driverlicense", "drivinglicence",
+        "drivinglicense", "dlnumber", "licensenumber", "socialsecurity", "ssnumber", "onetimecode", "otpcode",
+        "verificationcode", "authcode", "securityanswer", "securityquestion", "secretquestion", "secretanswer", "pinnumber"
+    };
+
+    // Long enough to be unmistakable inside a longer one-word id ("billingcardnumber", "newpassword2").
+    private static readonly string[] SecretIdParts =
+    [
+        "password", "passcode", "passphrase", "cardnumber", "cardnum", "securitycode", "accountnumber", "acctnumber",
+        "routingnumber", "socialsecurity", "verificationcode", "onetimecode", "passport", "cvv", "cvc"
+    ];
+
+    // With "card", these make the label about the card's holder or billing address, which are the user's details.
+    private static readonly string[] CardHolderWords =
+        ["name", "holder", "zip", "postal", "postcode", "address", "street", "city", "state", "country"];
+
+    // Headings and help that make a vague label ("Number", "Code", "Date", or none) a card, bank, or verification field.
+    private static readonly string[] SecretTopics =
+    [
+        "card", "credit", "debit", "payment", "pay", "bank", "banking", "deposit", "wire", "routing", "iban", "swift",
+        "verification", "verify", "authentication", "authenticate", "authenticator", "security", "secure", "password",
+        "passcode", "pin", "otp", "2fa", "mfa", "two factor", "one time", "identity", "identification", "id", "tax",
+        "ssn", "social security", "passport", "license", "licence", "expiry", "expiration", "cvv", "cvc"
+    ];
+
+    // Sections in which every field is a secret answer.
+    private static readonly string[] SecretSections =
+    [
+        "security question", "secret question", "challenge question", "security answer", "secret answer",
+        "recovery question", "memorable"
+    ];
+
+    // Words a label can be made of and still say nothing about what the field holds.
+    private static readonly HashSet<string> VagueLabelWords = new(StringComparer.Ordinal)
+    {
+        "number", "numbers", "no", "num", "nr", "code", "date", "value", "text", "field", "input", "entry", "answer",
+        "response", "month", "year", "day", "mm", "yy", "yyyy", "dd", "id", "key", "digit", "digits", "first", "last",
+        "enter", "the", "your", "a", "an", "here", "please", "type", "of", "on", "this"
+    };
+
+    // A label, heading, or id that marks a field which must never receive a profile value and never trigger a
+    // network call with profile data. Labels and raw ids ("ccNumber") both work.
     public static bool IsSensitive(string normalizedLabel)
     {
-        var s = LabelNormalizer.Normalize(normalizedLabel);
-        return Any(s, "password", "passcode", "ssn", "social security", "social insurance", "sin", "card number",
-            "credit card", "debit card", "cvc", "cvv", "cvv2", "csc", "security code", "expiration", "expiry",
-            "routing number", "account number", "iban", "tax id", "itin", "otp", "verification code",
-            "one time code", "auth code", "authentication code", "2fa", "mfa", "security question",
-            "security answer", "secret", "passport", "driver license", "drivers license", "driving licence");
+        if (string.IsNullOrWhiteSpace(normalizedLabel)) return false;
+        var words = LabelNormalizer.Normalize(normalizedLabel);
+        // "ccNumber" only reads as "cc number" once its camel case is split.
+        var split = LabelNormalizer.Humanize(normalizedLabel);
+        return IsSecret(words) || (split != words && IsSecret(split));
     }
 
-    // Text (a label or a section heading) that says the field is about another person, whose details are not in
-    // the user's block.
+    // The whole field. Text that names it (label, accessible name, placeholder, id, nearby text, OCR) is checked for
+    // secrets first. Help text and section text describe the field and count only when its label does not already say
+    // what it is, so "Phone" with help "We'll text a code to this number" stays a phone field. A vague label ("Number",
+    // "Code", "Date", or none) under a card, bank, or verification heading, or with such help, is that secret.
+    public static bool IsSensitive(FieldContext field)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        var naming = new[] { field.LabeledBy, field.Name, field.Placeholder, field.AutomationId, field.OcrText }.Concat(field.Siblings);
+        if (naming.Any(text => !string.IsNullOrWhiteSpace(text) && (IsSensitive(text!) || SecretMask().IsMatch(text!))))
+            return true;
+        // Under "Security questions", every answer is a secret, whatever its label.
+        if (field.Sections.Any(section => Mentions(LabelNormalizer.Normalize(section), SecretSections))) return true;
+
+        var label = LabelNormalizer.Normalize(field.BestLabel());
+        if (label.Length > 0 && (LabelCache.TryGetBuiltIn(label, out _) || Match(label) is not null)) return false;
+        var described = field.Sections.Prepend(field.HelpText).Where(text => !string.IsNullOrWhiteSpace(text)).ToArray();
+        if (described.Any(text => IsSensitive(text!))) return true;
+        return IsVague(label) && described.Any(text => Mentions(LabelNormalizer.Normalize(text), SecretTopics));
+    }
+
+    // Text (a label or a section heading) that says the field is about another person, whose details are not in the
+    // user's block.
     public static bool IsAboutSomeoneElse(string text)
     {
         var s = LabelNormalizer.Normalize(text);
@@ -197,6 +307,36 @@ public static class KeywordRules
         return null;
     }
 
+    private static bool IsSecret(string s)
+    {
+        if (s.Length == 0) return false;
+        if (SecretLabels.Contains(s) || Mentions(s, SecretTerms)) return true;
+        var words = s.Split(' ');
+        if (words.Any(word => SecretIdWords.Contains(word) || SecretIdParts.Any(part => word.Contains(part, StringComparison.Ordinal))))
+            return true;
+        // A card's number, code, or expiry is secret; the name and billing address on it are not.
+        return HasTerm(s, "card") && !CardHolderWords.Any(word => HasTerm(s, word));
+    }
+
+    // Empty, or made only of words that say nothing about the value ("Number", "Enter the 6 digit code", "1234").
+    private static bool IsVague(string label) =>
+        label.Length == 0 || label.Split(' ').All(word => VagueLabelWords.Contains(word) || word.All(char.IsDigit));
+
+    private static bool Mentions(string s, string[] terms) => s.Length > 0 && terms.Any(term => HasTerm(s, term));
+
+    // A term as whole words; a term longer than three letters may also end in "s" ("questions", "cards", "parents").
+    private static bool HasTerm(string value, string term)
+    {
+        var padded = " " + value + " ";
+        return padded.Contains(" " + term + " ", StringComparison.Ordinal) ||
+               (term.Length > 3 && padded.Contains(" " + term + "s ", StringComparison.Ordinal));
+    }
+
     private static bool Any(string value, params string[] terms) => terms.Any(term => Has(value, term));
     private static bool Has(string value, string term) => (" " + value + " ").Contains(" " + term + " ", StringComparison.Ordinal);
+
+    // A card number or SSN pattern shown as a placeholder: "1234 1234 1234 1234", "XXXX-XXXX-XXXX-XXXX", "3782 822463 10005",
+    // "XXX-XX-XXXX". Phone ("(555) 555-5555") and ZIP+4 ("12345-6789") patterns do not match.
+    [GeneratedRegex(@"^\s*(?:(?:[0-9Xx•*#]{4}[\s-]?){3}[0-9Xx•*#]{3,4}|[0-9Xx•*#]{4}[\s-]?[0-9Xx•*#]{6}[\s-]?[0-9Xx•*#]{5}|[0-9Xx•*#]{3}-[0-9Xx•*#]{2}-[0-9Xx•*#]{4})\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex SecretMask();
 }

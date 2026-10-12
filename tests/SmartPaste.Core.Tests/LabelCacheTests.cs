@@ -35,6 +35,8 @@ public class LabelCacheTests
     [InlineData("Card number")]
     [InlineData("Password")]
     [InlineData("Security question")]
+    [InlineData("Driver's license")]
+    [InlineData("Account #")]
     public void SensitiveLabelsAreNeverLearned(string label)
     {
         var cache = LabelCache.Empty();

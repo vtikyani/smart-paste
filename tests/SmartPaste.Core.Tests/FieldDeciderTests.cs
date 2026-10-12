@@ -139,16 +139,117 @@ public class FieldDeciderTests
     [InlineData("Field", null, "cardNumber")]
     public async Task SensitiveFieldsPlainPasteWithoutAskingAnyone(string label, string? placeholder, string? id)
     {
-        var jev = new FakeJev(_ => throw new InvalidOperationException("must not be called"));
-        var cache = LabelCache.Empty();
         var field = new FieldContext(label, null, id, null, "Edit", false, []) { Placeholder = placeholder };
-        var decision = await new FieldDecider(cache, jev).DecideAsync(field, Profile(Person), CancellationToken.None);
+        await AssertNeverAsked(field);
+    }
 
-        Assert.Equal(DecisionKind.PlainPaste, decision.Kind);
-        Assert.Equal(DecisionReasons.SensitiveLabel, decision.Reason);
-        Assert.Equal(DecisionSource.None, decision.DecidedBy);
-        Assert.Equal(0, jev.Calls);
-        Assert.Empty(cache.Learned);
+    [Theory]
+    [InlineData("Card #")]
+    [InlineData("Card no.")]
+    [InlineData("Exp. date")]
+    [InlineData("MM / YY")]
+    [InlineData("Expires")]
+    [InlineData("CID")]
+    [InlineData("CVC2")]
+    [InlineData("Card verification number")]
+    [InlineData("PIN")]
+    [InlineData("TIN")]
+    [InlineData("EIN")]
+    [InlineData("Taxpayer identification number")]
+    [InlineData("Bank account")]
+    [InlineData("Account #")]
+    [InlineData("Routing #")]
+    [InlineData("Sort code")]
+    [InlineData("SWIFT/BIC")]
+    [InlineData("IBAN")]
+    [InlineData("National Insurance number")]
+    [InlineData("Driver's license")]
+    [InlineData("Driver’s license number")]
+    [InlineData("Passport")]
+    [InlineData("Enter the 6-digit code")]
+    [InlineData("Confirmation code")]
+    [InlineData("Security questions")]
+    [InlineData("Security question 1")]
+    [InlineData("What was the name of your first pet?")]
+    [InlineData("In what city were you born?")]
+    [InlineData("Mother's maiden name")]
+    public async Task SensitiveLabelsAreNeverAsked(string label)
+    {
+        Assert.True(KeywordRules.IsSensitive(label));
+        await AssertNeverAsked(Field(label));
+    }
+
+    [Theory]
+    [InlineData("ccNumber")]
+    [InlineData("cardnumber")]
+    [InlineData("cc-exp")]
+    [InlineData("cvv2")]
+    [InlineData("pin")]
+    [InlineData("dlNumber")]
+    [InlineData("ssn")]
+    [InlineData("iban")]
+    [InlineData("billingcardnumber")]
+    [InlineData("newPassword2")]
+    public async Task SensitiveIdsAreNeverAsked(string id)
+    {
+        // Even with an ordinary visible label, a telling id is enough.
+        await AssertNeverAsked(new FieldContext("Number", null, id, null, "Edit", false, []));
+        await AssertNeverAsked(new FieldContext(null, null, id, null, "Edit", false, []));
+    }
+
+    [Fact]
+    public async Task HelpTextNearbyTextAndSectionsCountForSecrets()
+    {
+        // A vague label with one-time-code help.
+        await AssertNeverAsked(new FieldContext("Code", "Enter the 6-digit code we texted you", null, null, "Edit", false, []));
+        // An accessible name of its own, but next to a "Card number" label.
+        await AssertNeverAsked(new FieldContext("Number", null, null, null, "Edit", false, ["Card number"]));
+        // A CVV hint, as nearby text or as help.
+        await AssertNeverAsked(new FieldContext("Code", null, null, null, "Edit", false, ["3 digits on the back of your card"]));
+        await AssertNeverAsked(new FieldContext("Code", "3 digits on the back of your card", null, null, "Edit", false, []));
+        // Vague labels under a card, payment, bank, or verification heading.
+        await AssertNeverAsked(Field("Number") with { Sections = ["Credit card"] });
+        await AssertNeverAsked(Field("Code") with { Sections = ["Payment"] });
+        await AssertNeverAsked(Field("Date") with { Sections = ["Card details", "Checkout"] });
+        await AssertNeverAsked(Field("Number") with { Sections = ["Bank details"] });
+        await AssertNeverAsked(Field("Code") with { Sections = ["Verify your phone"] });
+        await AssertNeverAsked(new FieldContext(null, null, "input-7", null, "Edit", false, []) { Sections = ["Payment method"] });
+        // A card-number pattern as the only hint.
+        await AssertNeverAsked(new FieldContext(null, null, null, null, "Edit", false, []) { Placeholder = "1234 1234 1234 1234" });
+        await AssertNeverAsked(new FieldContext(null, null, null, null, "Edit", false, []) { Placeholder = "XXX-XX-XXXX" });
+        // Under a security-questions heading every answer is secret, whatever its label.
+        await AssertNeverAsked(Field("Name") with { Sections = ["Security questions"] });
+        await AssertNeverAsked(OcrOnly("Card number"));
+    }
+
+    [Theory]
+    [InlineData("Account email")]
+    [InlineData("Account name")]
+    [InlineData("Company")]
+    [InlineData("Name on card")]
+    [InlineData("Cardholder name")]
+    [InlineData("Card holder name")]
+    [InlineData("Billing ZIP")]
+    [InlineData("Preferred email")]
+    [InlineData("Shipping address")]
+    [InlineData("Date of birth")]
+    public async Task OrdinaryLabelsAreStillAsked(string label)
+    {
+        Assert.False(KeywordRules.IsSensitive(label));
+        var jev = new FakeJev(_ => Pick("none", 0.9));
+        await new FieldDecider(LabelCache.Empty(), jev).DecideAsync(Field(label), Profile(Person), CancellationToken.None);
+        Assert.Equal(1, jev.Calls);
+    }
+
+    [Fact]
+    public async Task AKnownLabelIsNotMadeSecretByItsHelpOrSection()
+    {
+        var jev = new FakeJev(_ => Pick("none", 0.9));
+        var decider = new FieldDecider(LabelCache.Empty(), jev);
+        await decider.DecideAsync(new FieldContext("Phone number", "We'll text a verification code to this number", null, null, "Edit", false, []), Profile(Person), CancellationToken.None);
+        await decider.DecideAsync(Field("Name") with { Sections = ["Credit card"] }, Profile(Person), CancellationToken.None);
+        await decider.DecideAsync(Field("Number") with { Sections = ["Contact details"] }, Profile(Person), CancellationToken.None);
+        Assert.Equal(3, jev.Calls);
     }
 
     [Fact]
@@ -298,6 +399,21 @@ public class FieldDeciderTests
 
         var formatted = FieldDecider.AllCandidates(profile, Field("State", control: "ComboBox"));
         Assert.Equal("New Jersey", formatted[1].Value);
+    }
+
+    private static FieldContext OcrOnly(string text) => new(null, null, null, null, "Edit", false, [], OcrText: text);
+
+    private static async Task AssertNeverAsked(FieldContext field)
+    {
+        var jev = new FakeJev(_ => throw new InvalidOperationException("must not be called"));
+        var cache = LabelCache.Empty();
+        var decision = await new FieldDecider(cache, jev).DecideAsync(field, Profile(Person), CancellationToken.None);
+
+        Assert.Equal(DecisionKind.PlainPaste, decision.Kind);
+        Assert.Equal(DecisionReasons.SensitiveLabel, decision.Reason);
+        Assert.Equal(DecisionSource.None, decision.DecidedBy);
+        Assert.Equal(0, jev.Calls);
+        Assert.Empty(cache.Learned);
     }
 
     private sealed class FakeJev(Func<JevQuestion, JevChoice> answer) : IJevChooser

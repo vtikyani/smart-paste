@@ -85,7 +85,7 @@ public sealed class FieldDecider
         ArgumentNullException.ThrowIfNull(profile);
         // These never reach Jev or anything else.
         if (field.IsPassword) return Plain(DecisionReasons.Password);
-        if (IsSensitive(field)) return Plain(DecisionReasons.SensitiveLabel);
+        if (KeywordRules.IsSensitive(field)) return Plain(DecisionReasons.SensitiveLabel);
         if (!field.HasContext) return Plain(DecisionReasons.NoLabel);
         if (profile.Keys.Count == 0) return Plain(DecisionReasons.KeyAbsent);
 
@@ -209,10 +209,6 @@ public sealed class FieldDecider
         // Only text a person reads next to the field is learned, never an automation id.
         if (field.LearnableLabel() is { } label) _cache.Set(label, key);
     }
-
-    private static bool IsSensitive(FieldContext field) =>
-        new[] { field.BestLabel(), field.LabeledBy, field.Name, field.Placeholder, LabelNormalizer.Humanize(field.AutomationId ?? "") }
-            .Any(text => !string.IsNullOrWhiteSpace(text) && KeywordRules.IsSensitive(text));
 
     private static Candidate Formatted(Candidate candidate, FieldContext field) =>
         candidate with { Value = ValueFormatter.Format(candidate.Key, candidate.Value, field) };
