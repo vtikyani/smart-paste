@@ -62,6 +62,10 @@ internal sealed record InputQueueOptions
 // thread and carries out what it asks for through IInputQueueHost.
 internal sealed class InputQueue
 {
+    // A held key repeats at least this often: Windows' longest repeat delay is one second. Longer silence from a key
+    // we are swallowing means its release never reached the hook.
+    private const long MaxRepeatGapMs = 1500;
+
     private static readonly ushort[] ModifierKeys =
     [
         VirtualKeys.LeftShift, VirtualKeys.RightShift, VirtualKeys.LeftControl, VirtualKeys.RightControl,
@@ -85,6 +89,9 @@ internal sealed class InputQueue
 
     // Trigger keys of queued Ctrl+V presses that are not raised yet, and the marker they belong to.
     private readonly Dictionary<ushort, int> _queuedTriggers = [];
+
+    // When each suppressed or captured key was last seen.
+    private readonly Dictionary<ushort, long> _lastSeen = [];
 
     private Phase _phase;
     private Request? _active;
@@ -137,6 +144,7 @@ internal sealed class InputQueue
     public bool OnKey(in KeyEvent key, long now, IKeySink? capture)
     {
         var virtualKey = key.VirtualKey;
+        if (!key.IsUp) ForgetIfReleaseWasMissed(virtualKey, now);
         if (_phase == Phase.Idle && !key.IsUp) RepairFromSystem(virtualKey);
         var isRepeat = !key.IsUp && _keys.IsDown(virtualKey);
         var swallow = Route(key, isRepeat, now, capture);
@@ -225,17 +233,14 @@ internal sealed class InputQueue
 
         if (_suppressed.Contains(virtualKey))
         {
-            if (key.IsUp) _suppressed.Remove(virtualKey);
+            Seen(_suppressed, key, now);
             return true;
         }
 
         if (_captured.Contains(virtualKey))
         {
-            if (key.IsUp)
-            {
-                _captured.Remove(virtualKey);
-            }
-            else if (capture is not null)
+            Seen(_captured, key, now);
+            if (!key.IsUp && capture is not null)
             {
                 var repeat = MakeStroke(key, isRepeat: true);
                 if (Accepts(capture, repeat)) _host.DeliverKey(capture, repeat);
@@ -250,7 +255,7 @@ internal sealed class InputQueue
             var stroke = MakeStroke(key, isRepeat);
             if (IsOfferable(stroke) && Accepts(capture, stroke))
             {
-                _captured.Add(virtualKey);
+                Swallow(_captured, virtualKey, now);
                 _host.DeliverKey(capture, stroke);
                 return true;
             }
@@ -263,7 +268,7 @@ internal sealed class InputQueue
     private bool RouteIdle(in KeyEvent key, bool isRepeat, long now)
     {
         if (!IsTrigger(key, isRepeat) || !_host.ShouldIntercept()) return false;
-        _suppressed.Add(key.VirtualKey);
+        Swallow(_suppressed, key.VirtualKey, now);
         Start(now);
         return true;
     }
@@ -352,7 +357,7 @@ internal sealed class InputQueue
         if (_host.ShouldIntercept())
         {
             _buffer.RemoveAll(entry => entry.MarkerId == marker.MarkerId);
-            if (stillHeld) _suppressed.Add(virtualKey);
+            if (stillHeld) Swallow(_suppressed, virtualKey, now);
             Start(now);
             return;
         }
@@ -362,6 +367,39 @@ internal sealed class InputQueue
             if (_buffer[i].MarkerId == marker.MarkerId) _buffer[i] = _buffer[i] with { MarkerId = 0 };
         _buffer.Insert(0, marker with { MarkerId = 0, IsMarker = false });
         Advance(now);
+    }
+
+    // From now on this held key's repeats and its release are swallowed.
+    private void Swallow(HashSet<ushort> keys, ushort virtualKey, long now)
+    {
+        keys.Add(virtualKey);
+        _lastSeen[virtualKey] = now;
+    }
+
+    // A repeat or the release of a key being swallowed.
+    private void Seen(HashSet<ushort> keys, in KeyEvent key, long now)
+    {
+        if (!key.IsUp)
+        {
+            _lastSeen[key.VirtualKey] = now;
+            return;
+        }
+        keys.Remove(key.VirtualKey);
+        _lastSeen.Remove(key.VirtualKey);
+    }
+
+    // A swallowed key that went quiet for longer than any auto-repeat gap was released without the hook seeing it
+    // (another hook swallowed the release, or it happened on the secure desktop). Without this, every later press of
+    // that key would be swallowed too.
+    private void ForgetIfReleaseWasMissed(ushort virtualKey, long now)
+    {
+        if (!_lastSeen.TryGetValue(virtualKey, out var lastSeen) || now - lastSeen <= MaxRepeatGapMs) return;
+        _suppressed.Remove(virtualKey);
+        _captured.Remove(virtualKey);
+        _lastSeen.Remove(virtualKey);
+        // Its release was lost, so this press is a new one, not a repeat.
+        _keys.Set(virtualKey, false);
+        _host.Report("type_ahead_lost_release", virtualKey);
     }
 
     // The hook misses events while another desktop has the keyboard (lock screen, UAC prompt), so a key can look

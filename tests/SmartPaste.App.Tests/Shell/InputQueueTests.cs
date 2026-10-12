@@ -709,6 +709,58 @@ public sealed class InputQueueTests
     // ---- Key state the hook missed ----
 
     [Fact]
+    public void AutoRepeatOfThePastesVStaysSwallowedEvenAfterALongRepeatDelay()
+    {
+        var h = StartRequest();
+        h.Advance(1000);
+        Assert.True(h.Press(V));
+        h.Advance(1000);
+        Assert.True(h.Press(V));
+        Assert.True(h.Release(V));
+        Assert.Single(h.Host.Raised);
+        Assert.DoesNotContain("type_ahead_lost_release", h.Host.Reports);
+    }
+
+    [Fact]
+    public void ALostReleaseDoesNotSwallowTheKeyForever()
+    {
+        // The release of the paste's V never reaches the hook (another hook took it, or the screen locked).
+        var h = StartRequest();
+        h.Release(Ctrl);
+        h.Paste();
+        h.Complete(1);
+        h.EchoAll();
+
+        h.Advance(1501);
+        Assert.False(h.Press(V));
+        Assert.Contains("type_ahead_lost_release", h.Host.Reports);
+        Assert.EndsWith("+v", h.AppView);
+    }
+
+    [Fact]
+    public void ACtrlVAfterALostReleaseIsANewRequest()
+    {
+        var h = StartRequest();
+        h.Paste();
+        h.Complete(1);
+        h.Advance(2000);
+        Assert.True(h.Press(V));
+        Assert.Equal(new[] { 1, 2 }, h.Host.Raised);
+    }
+
+    [Fact]
+    public void ACapturedKeyWhoseReleaseWasLostGoesToTheAppAgain()
+    {
+        var h = new InputQueueHarness();
+        h.Capture = new Sink(_ => true);
+        h.Press(Down);
+        h.Capture = null;
+        h.Advance(1501);
+        Assert.False(h.Press(Down));
+        Assert.Equal("+down", h.AppView);
+    }
+
+    [Fact]
     public void AStaleCtrlFromALockedScreenIsCorrectedBeforeDeciding()
     {
         // Ctrl was down when the hook started (or its release happened on the secure desktop) and is up now.
