@@ -108,6 +108,10 @@ public class RedactionTests
     public void LookalikesAreNotMasked(string text) => Assert.Equal(text, Redaction.MaskNumbers(text));
 
     [Fact]
+    public void ANumberGluedToAMaskedOneIsMaskedToo() =>
+        Assert.Equal("Pay [removed][removed] now", Redaction.MaskNumbers("Pay 4111 1111 1111 1111DE89 3704 0044 0532 0130 00 now"));
+
+    [Fact]
     public void TheMaskCanBeBlank() =>
         Assert.Equal("Paid with \nv@example.com", Redaction.Redact("Paid with 4111 1111 1111 1111\nv@example.com", ""));
 

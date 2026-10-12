@@ -310,6 +310,16 @@ public class LocalExtractorTests
     public void ALabeledAddressThatIsNotOneIsSkipped() =>
         Assert.Empty(LocalExtractor.Extract("Shipping address: Same as billing", Now).Entities);
 
+    [Fact]
+    public void ANameAfterAnAddressLabelStartsItsBlock()
+    {
+        var profile = LocalExtractor.Extract("Shipping address: Jordan Rivera\n2 Oak Ave\nPortland, OR 97201", Now);
+        Assert.Equal("Jordan Rivera", Value(profile, FieldKeys.FullName, "shipping address"));
+        Assert.Equal("2 Oak Ave", Value(profile, FieldKeys.Street, "shipping address"));
+        Assert.Equal("Portland", Value(profile, FieldKeys.City, "shipping address"));
+        Assert.Null(Value(profile, FieldKeys.Street, "person"));
+    }
+
     [Theory]
     [InlineData("123 1/2 Main St, Springfield, NJ 07081", "123 1/2 Main St", null)]
     [InlineData("Apt 4B 123 Main St, Springfield, NJ 07081", "123 Main St", "Apt 4B")]
@@ -322,8 +332,13 @@ public class LocalExtractorTests
     }
 
     [Fact]
-    public void TheCityAfterACenterIsOnlyTheCity() =>
+    public void TheCityAfterACenterIsOnlyTheCity()
+    {
         Assert.Equal("San Francisco", Value(LocalExtractor.Extract("4 Embarcadero Center San Francisco CA 94111", Now), FieldKeys.City));
+        var noZip = LocalExtractor.Extract("4 Embarcadero Center San Francisco CA", Now);
+        Assert.Equal("4 Embarcadero Center", Value(noZip, FieldKeys.Street));
+        Assert.NotEqual("Embarcadero Center San Francisco", Value(noZip, FieldKeys.City));
+    }
 
     [Fact]
     public void AClassYearIsNotAStreet() =>

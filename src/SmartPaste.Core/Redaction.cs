@@ -66,20 +66,26 @@ internal static partial class Redaction
         return builder.ToString();
     }
 
-    // Card numbers, SSNs, and IBANs replaced with the mask; everything else unchanged.
+    // Card numbers, SSNs, and IBANs replaced with the mask; everything else unchanged. Masking one number can leave a
+    // neighbor it was glued to standing alone ("4111 1111 1111 1111DE89 ..."), so the text is checked again until
+    // nothing is found, a few rounds at most.
     public static string MaskNumbers(string text, string mask = Mask)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var spans = SecretNumbers(text, cards: true);
-        if (spans.Count == 0) return text;
-        var builder = new StringBuilder(text.Length);
-        var position = 0;
-        foreach (var (start, end) in spans)
+        for (var round = 0; round < 3; round++)
         {
-            builder.Append(text, position, start - position).Append(mask);
-            position = end;
+            var spans = SecretNumbers(text, cards: true);
+            if (spans.Count == 0) break;
+            var builder = new StringBuilder(text.Length);
+            var position = 0;
+            foreach (var (start, end) in spans)
+            {
+                builder.Append(text, position, start - position).Append(mask);
+                position = end;
+            }
+            text = builder.Append(text, position, text.Length - position).ToString();
         }
-        return builder.Append(text, position, text.Length - position).ToString();
+        return text;
     }
 
     // True when the value holds a card number (when cards is true), an SSN, or an IBAN. A value too convoluted to check

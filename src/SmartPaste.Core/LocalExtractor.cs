@@ -100,12 +100,13 @@ public static partial class LocalExtractor
             {
                 current = heading.Entity;
                 inline = block.IsLabeled(i);
-                hasContent = inline || heading.Rest.Length > 0;
+                hasContent = heading.Rest.Length > 0;
                 entityOf[i] = current;
                 section = new Section(current, []);
                 sections.Add(section);
-                // "Ship to: Jordan Rivera": the rest of the line is the block's first line.
-                if (!inline && heading.Rest.Length > 0) section.Lines.Add(heading.Rest);
+                // "Ship to: Jordan Rivera" or "Shipping address: Jordan Rivera": the rest of the line is the block's first
+                // line. When it is the address a label already gave, reading it again adds nothing.
+                if (heading.Rest.Length > 0) section.Lines.Add(heading.Rest);
                 continue;
             }
             if (inline && block.IsLabeled(i)) (current, inline, section) = (null, false, null);
