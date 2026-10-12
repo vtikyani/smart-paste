@@ -23,7 +23,13 @@ public static partial class LabelNormalizer
         var value = RequiredTag().Replace(label.ToLowerInvariant(), " ");
         value = RequiredWord().Replace(value, " ");
         var builder = new StringBuilder(value.Length);
-        foreach (var c in value) builder.Append(char.IsLetterOrDigit(c) ? c : ' ');
+        foreach (var c in value)
+        {
+            // An apostrophe joins rather than splits: "Driver's license" reads as "drivers license", the same as the
+            // common spelling without it, instead of "driver s license", which no rule would recognize.
+            if (IsApostrophe(c)) continue;
+            builder.Append(char.IsLetterOrDigit(c) ? c : ' ');
+        }
         return Spaces().Replace(builder.ToString(), " ").Trim();
     }
 
@@ -56,6 +62,9 @@ public static partial class LabelNormalizer
         }
         return null;
     }
+
+    // Straight and typographic apostrophes, and the marks keyboards and fonts put in their place.
+    private static bool IsApostrophe(char c) => c is '\'' or '’' or '‘' or 'ʼ' or '`' or '´' or '′';
 
     [GeneratedRegex(@"\((?:required|optional)\)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex RequiredTag();

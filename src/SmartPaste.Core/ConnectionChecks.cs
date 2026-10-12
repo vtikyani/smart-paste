@@ -16,29 +16,30 @@ public static class ConnectionChecks
     public static async Task<KeyCheckResult> CheckOpenRouterKeyAsync(HttpClient http, string key, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(http);
-        string json;
         try
         {
-            json = await GetAsync(http, OpenRouterApi.KeyInfoUrl, key, ct).ConfigureAwait(false);
+            var json = await GetAsync(http, OpenRouterApi.KeyInfoUrl, key, ct).ConfigureAwait(false);
+            return ServiceHttp.ReadJson(json, ReadOpenRouterKey);
         }
         catch (ServiceException ex)
         {
-            return Failed(ex.Failure, "OpenRouter");
+            return Failed(ex, "OpenRouter");
         }
-        return ReadOpenRouterKey(json);
     }
 
     // GET /v1/models lists the models the key's account may use; it fails with 401 for a bad key and costs nothing.
+    // Only the status matters, unless the body is an error envelope sent with HTTP 200.
     public static async Task<KeyCheckResult> CheckTypeSafeKeyAsync(HttpClient http, string key, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(http);
         try
         {
-            await GetAsync(http, TypeSafeModelsUrl, key, ct).ConfigureAwait(false);
+            var body = await GetAsync(http, TypeSafeModelsUrl, key, ct).ConfigureAwait(false);
+            if (ServiceHttp.ErrorIn(body) is { } error) throw error;
         }
         catch (ServiceException ex)
         {
-            return Failed(ex.Failure, "TypeSafe");
+            return Failed(ex, "TypeSafe");
         }
         return new KeyCheckResult(true, null, "Key works.");
     }
@@ -51,33 +52,28 @@ public static class ConnectionChecks
         return await ServiceHttp.SendAsync(http, request, timer.Token, ct).ConfigureAwait(false);
     }
 
-    private static KeyCheckResult ReadOpenRouterKey(string json)
+    // Runs inside ServiceHttp.ReadJson: any shape this does not expect becomes BadResponse there.
+    private static KeyCheckResult ReadOpenRouterKey(JsonElement root)
     {
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            if (!document.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
-                return Failed(ServiceFailure.BadResponse, "OpenRouter");
-            // Management keys can manage the account but cannot run models.
-            if (IsTrue(data, "is_management_key") || IsTrue(data, "is_provisioning_key"))
-                return new KeyCheckResult(false, ServiceFailure.Unauthorized,
-                    "This is an OpenRouter management key. Create a regular API key instead.");
-            var spent = Number(data, "limit_remaining") is <= 0 ||
-                        (data.TryGetProperty("effective_budget", out var budget) && budget.ValueKind == JsonValueKind.Object &&
-                         Number(budget, "remaining_usd") is <= 0);
-            return spent
-                ? new KeyCheckResult(false, ServiceFailure.PaymentRequired, "This key has no credits left.")
-                : new KeyCheckResult(true, null, "Key works.");
-        }
-        catch (JsonException)
-        {
-            return Failed(ServiceFailure.BadResponse, "OpenRouter");
-        }
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Object)
+            throw new ServiceException(ServiceFailure.BadResponse);
+        // Management keys can manage the account but cannot run models.
+        if (IsTrue(data, "is_management_key") || IsTrue(data, "is_provisioning_key"))
+            return new KeyCheckResult(false, ServiceFailure.Unauthorized,
+                "This is an OpenRouter management key. Create a regular API key instead.");
+        var spent = Number(data, "limit_remaining") is <= 0 ||
+                    (data.TryGetProperty("effective_budget", out var budget) && budget.ValueKind == JsonValueKind.Object &&
+                     Number(budget, "remaining_usd") is <= 0);
+        return spent
+            ? new KeyCheckResult(false, ServiceFailure.PaymentRequired, "This key has no credits left.")
+            : new KeyCheckResult(true, null, "Key works.");
     }
 
-    private static KeyCheckResult Failed(ServiceFailure failure, string service) => new(false, failure, failure switch
+    private static KeyCheckResult Failed(ServiceException error, string service) => new(false, error.Failure, error.Failure switch
     {
         ServiceFailure.NoKey => "Enter a key first.",
+        // 403: the service knows the key but does not let it do this (a restricted key), so "rejected" would mislead.
+        ServiceFailure.Unauthorized when error.StatusCode == 403 => "This key isn't allowed to make this request.",
         ServiceFailure.Unauthorized => $"{service} rejected this key.",
         ServiceFailure.PaymentRequired => "This key has no credits left.",
         ServiceFailure.RateLimited => $"{service} is busy with too many requests. Try again in a minute.",

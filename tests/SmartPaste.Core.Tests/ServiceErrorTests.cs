@@ -37,5 +37,48 @@ public class ServiceErrorTests
         Assert.Equal(ServiceFailure.RateLimited, error.Failure);
         Assert.Equal(429, error.StatusCode);
         Assert.Equal("The service is rate limiting requests. (HTTP 429)", error.Message);
+        Assert.Equal("The service does not allow this API key to make this request. (HTTP 403)",
+            new ServiceException(ServiceFailure.Unauthorized, 403).Message);
     }
+
+    [Fact]
+    public void ReadJsonTurnsEveryMalformedBodyIntoBadResponse()
+    {
+        // Each reader assumes a shape the body does not have; JsonElement throws InvalidOperationException for that.
+        Assert.Equal(ServiceFailure.BadResponse, Read("[]", root => root.GetProperty("data").GetString()));
+        Assert.Equal(ServiceFailure.BadResponse, Read("{\"choices\":[\"x\"]}", root => root.GetProperty("choices")[0].GetProperty("message").GetString()));
+        Assert.Equal(ServiceFailure.BadResponse, Read("{\"n\":\"x\"}", root => root.GetProperty("n").GetInt32().ToString()));
+        Assert.Equal(ServiceFailure.BadResponse, Read("{\"a\":[]}", root => root.GetProperty("a")[3].GetString()));
+        Assert.Equal(ServiceFailure.BadResponse, Read("not json", root => root.GetString()));
+        Assert.Equal(ServiceFailure.BadResponse, Read("", root => root.GetString()));
+        // A ServiceException the reader throws is kept as it is.
+        Assert.Equal(ServiceFailure.RateLimited, Read("{}", _ => throw new ServiceException(ServiceFailure.RateLimited)));
+        Assert.Equal("x", ServiceHttp.ReadJson("{\"a\":\"x\"}", root => root.GetProperty("a").GetString()));
+
+        static ServiceFailure Read(string body, Func<System.Text.Json.JsonElement, string?> read) =>
+            Assert.Throws<ServiceException>(() => ServiceHttp.ReadJson(body, read)).Failure;
+    }
+
+    [Theory]
+    [InlineData("{\"error\":{\"code\":402,\"message\":\"Out of balance zq7\"}}", ServiceFailure.PaymentRequired, 402)]
+    [InlineData("{\"error\":{\"code\":\"401\"}}", ServiceFailure.Unauthorized, 401)]
+    [InlineData("{\"error\":{\"status\":429}}", ServiceFailure.RateLimited, 429)]
+    [InlineData("{\"error\":{\"code\":7}}", ServiceFailure.BadResponse, null)]
+    [InlineData("{\"error\":{\"code\":\"rate_limited\"}}", ServiceFailure.BadResponse, null)]
+    public void ErrorEnvelopesMapLikeHttpStatuses(string body, ServiceFailure failure, int? status)
+    {
+        var error = ServiceHttp.ErrorIn(body);
+        Assert.NotNull(error);
+        Assert.Equal(failure, error.Failure);
+        Assert.Equal(status, error.StatusCode);
+        Assert.DoesNotContain("zq7", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("{\"answers\":{}}")]
+    [InlineData("{\"error\":null}")]
+    [InlineData("{\"error\":\"text\"}")]
+    [InlineData("[]")]
+    [InlineData("not json")]
+    public void OtherBodiesAreNotErrorEnvelopes(string body) => Assert.Null(ServiceHttp.ErrorIn(body));
 }

@@ -111,10 +111,12 @@ public sealed class JevClient : IJevChooser
     }
 
     // Reads Jev's answer. Tolerates a missing choice (the most probable option wins) and a missing confidence
-    // (computed from the probabilities). Any other problem is a ServiceException with BadResponse.
+    // (computed from the probabilities). An error envelope sent with HTTP 200 ({"error":{"code":402}}) is the failure
+    // its code names; any other problem is a ServiceException with BadResponse.
     public static JevChoice ParseResponse(string json, JevEndpoint route) => Parse(json, route, null);
 
-    // As above, and the choice must be one of the options that were sent.
+    // As above, and the choice must be one of the options that were sent. Names that differ only in case or
+    // surrounding spaces are mapped back to the option sent.
     public static JevChoice ParseResponse(string json, JevEndpoint route, IReadOnlyCollection<string> options)
     {
         ArgumentNullException.ThrowIfNull(options);
@@ -143,55 +145,56 @@ public sealed class JevClient : IJevChooser
         return await ServiceHttp.SendAsync(_http, request, token, ct).ConfigureAwait(false);
     }
 
-    private static JevChoice Parse(string json, JevEndpoint route, IReadOnlyCollection<string>? options)
+    // Every malformed body (not JSON, an array where an object belongs) becomes BadResponse inside ReadJson, so the
+    // decider always gets a ServiceException and falls back to the local label list.
+    private static JevChoice Parse(string json, JevEndpoint route, IReadOnlyCollection<string>? options) =>
+        ServiceHttp.ReadJson(json, root => ReadChoice(root, route, options));
+
+    private static JevChoice ReadChoice(JsonElement root, JevEndpoint route, IReadOnlyCollection<string>? options)
     {
-        JsonDocument document;
-        try
+        var answer = FindAnswer(root);
+        var probabilities = new Dictionary<string, double>(StringComparer.Ordinal);
+        if (answer.TryGetProperty("probabilities", out var node) && node.ValueKind == JsonValueKind.Object)
         {
-            document = JsonDocument.Parse(json);
-        }
-        catch (JsonException)
-        {
-            // The parser's message can quote the body, so it is not kept.
-            throw new ServiceException(ServiceFailure.BadResponse);
-        }
-
-        using (document)
-        {
-            var answer = FindAnswer(document.RootElement);
-            var probabilities = new Dictionary<string, double>(StringComparer.Ordinal);
-            if (answer.TryGetProperty("probabilities", out var node) && node.ValueKind == JsonValueKind.Object)
+            foreach (var item in node.EnumerateObject())
             {
-                foreach (var item in node.EnumerateObject())
-                {
-                    if (item.Value.ValueKind == JsonValueKind.Number && item.Value.TryGetDouble(out var p) &&
-                        double.IsFinite(p) && (options is null || options.Contains(item.Name)))
-                        probabilities[item.Name] = Math.Clamp(p, 0, 1);
-                }
+                if (item.Value.ValueKind == JsonValueKind.Number && item.Value.TryGetDouble(out var p) &&
+                    double.IsFinite(p) && OptionName(item.Name, options) is { } name)
+                    probabilities[name] = Math.Clamp(p, 0, 1);
             }
-
-            var choice = answer.TryGetProperty("choice", out var choiceNode) && choiceNode.ValueKind == JsonValueKind.String
-                ? choiceNode.GetString()
-                : null;
-            if (string.IsNullOrEmpty(choice) && probabilities.Count > 0)
-                choice = probabilities.MaxBy(p => p.Value).Key;
-            if (string.IsNullOrEmpty(choice)) throw new ServiceException(ServiceFailure.BadResponse);
-
-            var known = options ?? (probabilities.Count > 0 ? probabilities.Keys : null);
-            if (known is not null && !known.Contains(choice)) throw new ServiceException(ServiceFailure.BadResponse);
-
-            double confidence;
-            if (answer.TryGetProperty("confidence", out var confidenceNode) &&
-                confidenceNode.ValueKind == JsonValueKind.Number &&
-                confidenceNode.TryGetDouble(out var parsed) && double.IsFinite(parsed))
-                confidence = Math.Clamp(parsed, 0, 1);
-            else if (probabilities.TryGetValue(choice, out var top))
-                confidence = ChoiceConfidence(top, options?.Count ?? probabilities.Count);
-            else
-                throw new ServiceException(ServiceFailure.BadResponse);
-
-            return new JevChoice(choice, confidence, probabilities, route);
         }
+
+        var choice = answer.TryGetProperty("choice", out var choiceNode) && choiceNode.ValueKind == JsonValueKind.String
+            ? choiceNode.GetString()
+            : null;
+        if (string.IsNullOrWhiteSpace(choice) && probabilities.Count > 0)
+            choice = probabilities.MaxBy(p => p.Value).Key;
+        if (string.IsNullOrWhiteSpace(choice)) throw new ServiceException(ServiceFailure.BadResponse);
+        choice = OptionName(choice, options) ?? throw new ServiceException(ServiceFailure.BadResponse);
+
+        var known = options ?? (probabilities.Count > 0 ? probabilities.Keys : null);
+        if (known is not null && !known.Contains(choice)) throw new ServiceException(ServiceFailure.BadResponse);
+
+        double confidence;
+        if (answer.TryGetProperty("confidence", out var confidenceNode) &&
+            confidenceNode.ValueKind == JsonValueKind.Number &&
+            confidenceNode.TryGetDouble(out var parsed) && double.IsFinite(parsed))
+            confidence = Math.Clamp(parsed, 0, 1);
+        else if (probabilities.TryGetValue(choice, out var top))
+            confidence = ChoiceConfidence(top, options?.Count ?? probabilities.Count);
+        else
+            throw new ServiceException(ServiceFailure.BadResponse);
+
+        return new JevChoice(choice, confidence, probabilities, route);
+    }
+
+    // The option a name in the answer refers to: the name itself, or the option it matches ignoring case and
+    // surrounding spaces. Null when options were given and none matches. Without options the name is taken as is.
+    private static string? OptionName(string name, IReadOnlyCollection<string>? options)
+    {
+        if (options is null || options.Contains(name)) return name;
+        var trimmed = name.Trim();
+        return options.FirstOrDefault(option => string.Equals(option, trimmed, StringComparison.OrdinalIgnoreCase));
     }
 
     // The answer sits under our question id. A response with exactly one answer under another id is accepted too.

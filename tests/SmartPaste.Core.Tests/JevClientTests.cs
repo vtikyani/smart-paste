@@ -30,7 +30,76 @@ public class JevClientTests
         Assert.Equal(JsonValueKind.Object, body.RootElement.GetProperty("state").ValueKind);
         var question = body.RootElement.GetProperty("questions").GetProperty("field_value");
         Assert.Equal("choice", question.GetProperty("type").GetString());
-        Assert.True(question.GetProperty("criteria").TryGetProperty("none", out _));
+        // Criteria are option name -> plain string, the one shape every route documents.
+        var criteria = question.GetProperty("criteria").EnumerateObject().ToArray();
+        Assert.Equal(["zip", "none"], criteria.Select(c => c.Name));
+        Assert.All(criteria, c => Assert.Equal(JsonValueKind.String, c.Value.ValueKind));
+        Assert.Equal("ZIP / postal code: 07081 — ZIP or postal code", criteria[0].Value.GetString());
+    }
+
+    [Theory]
+    [InlineData("{\"error\":{\"code\":402,\"message\":\"Insufficient balance zq7\"}}", ServiceFailure.PaymentRequired, 402)]
+    [InlineData("{\"error\":{\"code\":\"402\",\"message\":\"Insufficient balance zq7\"}}", ServiceFailure.PaymentRequired, 402)]
+    [InlineData("{\"error\":{\"code\":401,\"message\":\"No auth zq7\"}}", ServiceFailure.Unauthorized, 401)]
+    [InlineData("{\"error\":{\"code\":403,\"message\":\"Forbidden zq7\"}}", ServiceFailure.Unauthorized, 403)]
+    [InlineData("{\"error\":{\"code\":429,\"message\":\"Slow down zq7\"}}", ServiceFailure.RateLimited, 429)]
+    [InlineData("{\"error\":{\"status\":503,\"message\":\"Busy zq7\"}}", ServiceFailure.ServerError, 503)]
+    public async Task ErrorEnvelopeWithHttp200MapsToItsCode(string body, ServiceFailure expected, int status)
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, body);
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new JevClient(http.Client(), new JevCredentials("ts", null)).ChooseAsync(Question(), Deadline, CancellationToken.None));
+        Assert.Equal(expected, error.Failure);
+        Assert.Equal(status, error.StatusCode);
+        // The service's own message is never kept.
+        Assert.DoesNotContain("zq7", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ErrorEnvelopeOnTypeSafeFallsThroughToOpenRouter()
+    {
+        var http = FakeHttp.Reply(request => request.RequestUri!.Host == "api.typesafe.ai"
+            ? FakeHttp.Response(HttpStatusCode.OK, "{\"error\":{\"code\":402,\"message\":\"no credits\"}}")
+            : FakeHttp.Response(HttpStatusCode.OK, Answer));
+        var choice = await new JevClient(http.Client(), new JevCredentials("ts", "or")).ChooseAsync(Question(), Deadline, CancellationToken.None);
+        Assert.Equal(JevEndpoint.OpenRouter, choice.Route);
+        Assert.Equal(ServiceFailure.PaymentRequired, choice.FailedRoutes[JevEndpoint.TypeSafe]);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("{\"answers\":[]}")]
+    [InlineData("{\"answers\":{\"field_value\":[\"zip\"]}}")]
+    [InlineData("{\"answers\":{\"field_value\":{\"choice\":\"zip\",\"probabilities\":[0.9]}}}")]
+    [InlineData("{\"answers\":{\"field_value\":{\"choice\":7,\"confidence\":0.9}}}")]
+    [InlineData("\"zip\"")]
+    [InlineData("null")]
+    public async Task MalformedBodiesAreBadResponses(string body)
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, body);
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new JevClient(http.Client(), new JevCredentials("ts", null)).ChooseAsync(Question(), Deadline, CancellationToken.None));
+        Assert.Equal(ServiceFailure.BadResponse, error.Failure);
+    }
+
+    [Fact]
+    public async Task UnknownCharsetIsABadResponseNotACrash()
+    {
+        var http = FakeHttp.Reply(_ => FakeHttp.ResponseWithCharset(Answer, "no-such-charset"));
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new JevClient(http.Client(), new JevCredentials("ts", null)).ChooseAsync(Question(), Deadline, CancellationToken.None));
+        Assert.Equal(ServiceFailure.BadResponse, error.Failure);
+    }
+
+    [Fact]
+    public async Task AnswerNamesThatDifferInCaseMapBackToTheOptionSent()
+    {
+        const string body = "{\"answers\":{\"field_value\":{\"choice\":\" ZIP \",\"confidence\":0.97,\"probabilities\":{\"Zip\":0.98,\"NONE\":0.02}}}}";
+        var choice = await new JevClient(FakeHttp.Reply(HttpStatusCode.OK, body).Client(), new JevCredentials("ts", null))
+            .ChooseAsync(Question(), Deadline, CancellationToken.None);
+        Assert.Equal("zip", choice.Choice);
+        Assert.Equal(0.98, choice.Probabilities["zip"]);
+        Assert.Equal(0.02, choice.Probabilities["none"]);
     }
 
     [Fact]

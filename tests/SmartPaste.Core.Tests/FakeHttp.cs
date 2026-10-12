@@ -18,6 +18,14 @@ internal sealed class FakeHttp(Func<HttpRequestMessage, string?, CancellationTok
     public static HttpResponseMessage Response(HttpStatusCode status, string body = "{}") =>
         new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
 
+    // A 200 whose Content-Type names a charset .NET cannot decode, as a misconfigured server might send.
+    public static HttpResponseMessage ResponseWithCharset(string body, string charset)
+    {
+        var content = new ByteArrayContent(Encoding.UTF8.GetBytes(body));
+        content.Headers.TryAddWithoutValidation("Content-Type", $"application/json; charset={charset}");
+        return new HttpResponseMessage(HttpStatusCode.OK) { Content = content };
+    }
+
     public HttpClient Client() => new(this);
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

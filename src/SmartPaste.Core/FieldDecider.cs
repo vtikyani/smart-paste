@@ -55,14 +55,33 @@ public sealed record Decision(
 // built-in list, keyword rules) decides only when Jev is unavailable.
 public sealed class FieldDecider
 {
-    // TypeSafe's guidance: act automatically above 0.8; below that, let the user choose.
+    // TypeSafe's guidance: act automatically only above 0.8; otherwise let the user choose.
     public const double ConfidenceFloor = 0.8;
+
+    // Jev's confidence measures how concentrated its answer is, not how likely the chosen value is: 0.52 for the full
+    // name and 0.48 for the first name can still be "confident". The chosen value must also be at least this
+    // probable to be pasted without asking.
+    public const double ChoiceProbabilityFloor = 0.7;
+
     public const int PickerSize = 3;
 
     // Deadline for Jev at paste time, shared by all routes. Ask-ahead callers pass a longer one.
     public static readonly TimeSpan PasteDeadline = TimeSpan.FromMilliseconds(1500);
 
-    private static readonly string[] EntityWords = ["billing", "shipping", "home", "work", "mailing", "company"];
+    // Words in a label or section that name the entity a value belongs to, and the word in that entity's label.
+    private static readonly (string Entity, string[] Words)[] EntityWords =
+    [
+        ("billing", ["billing"]),
+        ("shipping", ["shipping", "delivery"]),
+        ("home", ["home"]),
+        ("work", ["work"]),
+        ("mailing", ["mailing"]),
+        ("company", ["company", "employer", "organization", "organisation", "business"])
+    ];
+
+    // A value at least this long counts inside a longer label too ("Hi Jordan Rivera"); shorter ones ("NJ", "4")
+    // are too common as words.
+    private const int ValueInLabelMinLength = 3;
 
     private readonly LabelCache _cache;
     private readonly IJevChooser? _jev;
@@ -85,7 +104,7 @@ public sealed class FieldDecider
         ArgumentNullException.ThrowIfNull(profile);
         // These never reach Jev or anything else.
         if (field.IsPassword) return Plain(DecisionReasons.Password);
-        if (IsSensitive(field)) return Plain(DecisionReasons.SensitiveLabel);
+        if (KeywordRules.IsSensitive(field)) return Plain(DecisionReasons.SensitiveLabel);
         if (!field.HasContext) return Plain(DecisionReasons.NoLabel);
         if (profile.Keys.Count == 0) return Plain(DecisionReasons.KeyAbsent);
 
@@ -102,7 +121,7 @@ public sealed class FieldDecider
             try
             {
                 var choice = await _jev.ChooseAsync(question, jevDeadline, ct).ConfigureAwait(false);
-                return FromJev(choice, question, field);
+                return FromJev(choice, question, field, profile);
             }
             catch (ServiceException ex)
             {
@@ -114,12 +133,23 @@ public sealed class FieldDecider
         return fallback with { JevFailure = failure };
     }
 
-    // The user chose a value in the picker: remember the label so the offline fallback knows it next time.
+    // The user chose a value in the picker: remember the label so the offline fallback knows it next time. Without
+    // the profile only the chosen value is kept from being learned as a label; prefer the overload with the profile.
     public void LearnChoice(FieldContext field, Candidate chosen)
     {
         ArgumentNullException.ThrowIfNull(field);
         ArgumentNullException.ThrowIfNull(chosen);
-        Learn(field, chosen.Key);
+        Learn(field, chosen.Key, [chosen.Value]);
+    }
+
+    // As above. A label that matches any value of the armed block (a name shown next to the field) is never learned,
+    // because the label cache is saved to disk.
+    public void LearnChoice(FieldContext field, Candidate chosen, Profile profile)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        ArgumentNullException.ThrowIfNull(chosen);
+        ArgumentNullException.ThrowIfNull(profile);
+        Learn(field, chosen.Key, AllValues(profile).Append(chosen.Value));
     }
 
     // Every distinct value of the block, standard keys first, formatted for the field when one is given.
@@ -134,21 +164,23 @@ public sealed class FieldDecider
         return candidates;
     }
 
-    private Decision FromJev(JevChoice choice, JevQuestion question, FieldContext field)
+    private Decision FromJev(JevChoice choice, JevQuestion question, FieldContext field, Profile profile)
     {
-        if (choice.Confidence >= ConfidenceFloor)
+        // Jev finds "none" most likely: a normal paste, however unsure it is about the rest. Offering the user's values
+        // here would invite pasting them where they do not belong (an emergency contact's email).
+        if (NoneIsMostLikely(choice))
+            return Plain(DecisionReasons.NoneSelected) with { Source = "jev", DecidedBy = DecisionSource.Jev, Confidence = choice.Confidence };
+
+        if (choice.Confidence > ConfidenceFloor && Probability(choice, choice.Choice) >= ChoiceProbabilityFloor &&
+            question.Option(choice.Choice)?.Candidate is { } picked)
         {
-            if (choice.IsNone) return Plain(DecisionReasons.NoneSelected) with { Source = "jev", DecidedBy = DecisionSource.Jev, Confidence = choice.Confidence };
-            if (question.Option(choice.Choice)?.Candidate is { } picked)
+            var value = Formatted(picked, field);
+            Learn(field, value.Key, AllValues(profile).Append(value.Value));
+            return new Decision(DecisionKind.Value, value.Key, value.Value, [value], "jev", DecisionReasons.Matched)
             {
-                var value = Formatted(picked, field);
-                Learn(field, value.Key);
-                return new Decision(DecisionKind.Value, value.Key, value.Value, [value], "jev", DecisionReasons.Matched)
-                {
-                    DecidedBy = DecisionSource.Jev,
-                    Confidence = choice.Confidence
-                };
-            }
+                DecidedBy = DecisionSource.Jev,
+                Confidence = choice.Confidence
+            };
         }
 
         // Unsure: Jev's most probable values (never "none") for the user to choose from.
@@ -171,12 +203,24 @@ public sealed class FieldDecider
         };
     }
 
+    // "none" has the highest probability. A tie goes to Jev's own choice; without probabilities, its choice decides.
+    private static bool NoneIsMostLikely(JevChoice choice)
+    {
+        if (!choice.Probabilities.TryGetValue(JevQuestion.NoneOption, out var none)) return choice.IsNone;
+        var best = choice.Probabilities.Where(p => p.Key != JevQuestion.NoneOption).Select(p => p.Value).DefaultIfEmpty(0).Max();
+        return none > best || (none == best && choice.IsNone);
+    }
+
+    // The probability Jev gave an option. An answer without one is never pasted unasked: its confidence alone cannot
+    // say how likely the chosen value is.
+    private static double Probability(JevChoice choice, string option) => choice.Probabilities.GetValueOrDefault(option);
+
     // The offline fallback: learned labels, then the built-in list, then keyword rules.
     private Decision DecideLocally(FieldContext field, Profile profile)
     {
         var label = LabelNormalizer.Normalize(field.BestLabel());
-        // A field about someone else (emergency contact, reference) must not get the user's own details.
-        if (label.Length == 0 || field.Sections.Any(KeywordRules.IsAboutSomeoneElse)) return Plain(DecisionReasons.NoMatch);
+        // A field about someone else (spouse, emergency contact, reference) must not get the user's own details.
+        if (label.Length == 0 || IsAboutSomeoneElse(field)) return Plain(DecisionReasons.NoMatch);
         if (_cache.TryGet(label, out var key, out var learned))
             return Resolve(key, learned ? DecisionSource.Learned : DecisionSource.BuiltIn, field, profile);
         if (KeywordRules.Match(label) is { } ruleKey) return Resolve(ruleKey, DecisionSource.Rules, field, profile);
@@ -196,23 +240,42 @@ public sealed class FieldDecider
         foreach (var context in field.Sections.Prepend(field.BestLabel()))
         {
             var text = LabelNormalizer.Normalize(context);
-            var matches = candidates.Where(c =>
-                EntityWords.Any(w => Has(text, w) && Has(LabelNormalizer.Normalize(c.EntityLabel), w))).ToArray();
+            var matches = candidates.Where(c => EntityWords.Any(entity =>
+                entity.Words.Any(word => Has(text, word)) && Has(LabelNormalizer.Normalize(c.EntityLabel), entity.Entity))).ToArray();
             if (matches.Length == 1)
                 return new Decision(DecisionKind.Value, key, matches[0].Value, candidates, token, DecisionReasons.EntityMatched) { DecidedBy = source };
         }
         return new Decision(DecisionKind.Picker, key, null, candidates, token, DecisionReasons.MultipleValues) { DecidedBy = source };
     }
 
-    private void Learn(FieldContext field, string key)
+    // Any text that names the field, or a section it sits in, says it belongs to another person.
+    private static bool IsAboutSomeoneElse(FieldContext field) =>
+        new[] { field.BestLabel(), field.LabeledBy, field.Name, field.Placeholder, field.MeaningfulAutomationId, field.OcrText }
+            .Concat(field.Siblings).Concat(field.Sections)
+            .Any(text => !string.IsNullOrWhiteSpace(text) && KeywordRules.IsAboutSomeoneElse(text!));
+
+    // Only text the app labels the field with is learned (never an id, help text, or OCR), never one of the block's
+    // values, never from a field that is sensitive by its context, and only labels the cache accepts (not built in,
+    // not vague, not sensitive; see LabelCache.IsLearnable).
+    private void Learn(FieldContext field, string key, IEnumerable<string> values)
     {
-        // Only text a person reads next to the field is learned, never an automation id.
-        if (field.LearnableLabel() is { } label) _cache.Set(label, key);
+        if (field.LearnableLabel() is { } label && !IsOneOfTheValues(label, values) && !KeywordRules.IsSensitive(field))
+            _cache.Set(label, key);
     }
 
-    private static bool IsSensitive(FieldContext field) =>
-        new[] { field.BestLabel(), field.LabeledBy, field.Name, field.Placeholder, LabelNormalizer.Humanize(field.AutomationId ?? "") }
-            .Any(text => !string.IsNullOrWhiteSpace(text) && KeywordRules.IsSensitive(text));
+    private static bool IsOneOfTheValues(string label, IEnumerable<string> values)
+    {
+        var text = LabelNormalizer.Normalize(label);
+        foreach (var value in values)
+        {
+            var normalized = LabelNormalizer.Normalize(value);
+            if (normalized.Length == 0) continue;
+            if (normalized == text || (normalized.Length >= ValueInLabelMinLength && Has(text, normalized))) return true;
+        }
+        return false;
+    }
+
+    private static IEnumerable<string> AllValues(Profile profile) => profile.Entities.SelectMany(e => e.Fields.Values);
 
     private static Candidate Formatted(Candidate candidate, FieldContext field) =>
         candidate with { Value = ValueFormatter.Format(candidate.Key, candidate.Value, field) };
