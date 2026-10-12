@@ -162,6 +162,75 @@ public class OpenRouterParserTests
         Assert.Equal(ServiceFailure.BadResponse, error.Failure);
     }
 
+    // Valid JSON in an unexpected shape, or text the reader cannot decode, used to escape as a reader error.
+    [Theory]
+    [InlineData("")]
+    [InlineData("null")]
+    [InlineData("[]")]
+    [InlineData("\"text\"")]
+    [InlineData("{\"choices\":[\"x\"]}")]
+    [InlineData("{\"choices\":[null]}")]
+    [InlineData("{\"choices\":[[]]}")]
+    [InlineData("{\"choices\":{}}")]
+    [InlineData("{\"choices\":[{}]}")]
+    [InlineData("{\"choices\":[{\"message\":\"x\"}]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":5}}]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":null}}]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":[{\"type\":\"text\"}]}}]}")]
+    [InlineData("{\"choices\":[{\"message\":{\"content\":\"\\ud800\"}}]}")]
+    [InlineData("{\"choices\":[{\"finish_reason\":\"\\udc00\",\"message\":{\"content\":\"x\"}}]}")]
+    [InlineData("{\"error\":\"Something went wrong\"}")]
+    [InlineData("{\"error\":{\"code\":\"\\ud800\"}}")]
+    public async Task MalformedBodiesAreBadResponses(string body)
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, body);
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(ServiceFailure.BadResponse, error.Failure);
+    }
+
+    [Fact]
+    public async Task UndecodableModelJsonIsABadResponse()
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply("{\"entities\":[{\"label\":\"\\ud800\",\"fields\":{\"email\":\"ada@example.com\"}}]}"));
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(ServiceFailure.BadResponse, error.Failure);
+    }
+
+    [Theory]
+    [InlineData("{\"error\":{\"code\":401,\"message\":\"No auth credentials found\"}}", ServiceFailure.Unauthorized, 401)]
+    [InlineData("{\"error\":{\"code\":403,\"message\":\"Key disabled\"}}", ServiceFailure.Unauthorized, 403)]
+    [InlineData("{\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}", ServiceFailure.PaymentRequired, 402)]
+    [InlineData("{\"error\":{\"code\":\"429\",\"message\":\"Rate limited\"}}", ServiceFailure.RateLimited, 429)]
+    [InlineData("{\"error\":{\"code\":502,\"message\":\"Provider returned error\"}}", ServiceFailure.BadResponse, 502)]
+    [InlineData("{\"error\":{\"code\":408,\"message\":\"Timed out\"}}", ServiceFailure.BadResponse, 408)]
+    [InlineData("{\"error\":{\"message\":\"Unknown\"}}", ServiceFailure.BadResponse, null)]
+    [InlineData("{\"error\":{\"code\":\"insufficient_quota\"}}", ServiceFailure.BadResponse, null)]
+    [InlineData("{\"error\":{\"code\":402},\"choices\":[{\"message\":{\"content\":\"{}\"}}]}", ServiceFailure.PaymentRequired, 402)]
+    [InlineData("{\"choices\":[{\"error\":{\"code\":429,\"message\":\"Rate limited\"},\"finish_reason\":\"error\"}]}", ServiceFailure.RateLimited, 429)]
+    public async Task ErrorEnvelopesInA200MapByTheirCode(string body, ServiceFailure expected, int? status)
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, body);
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(expected, error.Failure);
+        Assert.Equal(status, error.StatusCode);
+        // The envelope's message can quote the request; it never reaches the exception.
+        foreach (var word in new[] { "Insufficient", "Provider", "credentials", "disabled", "Rate limited", "Timed out", "Unknown" })
+            Assert.DoesNotContain(word, error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ANullErrorBesideAReplyIsNoError()
+    {
+        var body = "{\"error\":null,\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":" +
+                   JsonSerializer.Serialize(Entities) + "},\"finish_reason\":\"stop\"}]}";
+        var http = FakeHttp.Reply(HttpStatusCode.OK, body);
+        var profile = await new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.Equal("ada@example.com", profile.ValuesFor(FieldKeys.Email).Single().Value);
+    }
+
     [Fact]
     public async Task ErrorObjectWithStatusIsTyped()
     {

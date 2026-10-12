@@ -135,9 +135,10 @@ public static class ProfileParser
             }
             return entities;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
-            // The JSON parser's message can quote the reply, which can hold copied text, so it is not kept.
+            // Not JSON, or a string the reader cannot decode (an invalid escape such as a lone "\ud800"). The reader's
+            // message can quote the reply, which can hold copied text, so it is not kept.
             throw new FormatException("Model reply is not valid profile JSON.");
         }
     }

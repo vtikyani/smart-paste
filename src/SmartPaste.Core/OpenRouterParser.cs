@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -81,8 +82,9 @@ public sealed class OpenRouterParser
         {
             return ProfileParser.ParseGrounded(content, sent, now);
         }
-        catch (FormatException)
+        catch (Exception ex) when (ex is FormatException or RegexMatchTimeoutException)
         {
+            // Not profile JSON, or values too convoluted to read in time.
             throw new ServiceException(ServiceFailure.BadResponse);
         }
     }
@@ -160,42 +162,69 @@ public sealed class OpenRouterParser
         };
     }
 
-    // The assistant message text, or a ServiceException when the reply carries an error, was cut off, or is malformed.
+    // The assistant message text. Any other reply is a ServiceException: an error envelope by its code, and anything
+    // else (not JSON, an unexpected shape, cut off at the token limit) BadResponse.
     private static string ReadContent(string json)
     {
-        JsonDocument document;
         try
         {
-            document = JsonDocument.Parse(json);
+            using var document = JsonDocument.Parse(json);
+            return ReadContent(document.RootElement);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
+            // Not JSON, or a string the reader cannot decode (an invalid escape). The reader's message can quote the
+            // reply, so it is not kept.
             throw new ServiceException(ServiceFailure.BadResponse);
         }
+    }
 
-        using (document)
+    // Every element's kind is checked before it is read, so an unexpected shape is a BadResponse, never a reader error.
+    private static string ReadContent(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object) throw new ServiceException(ServiceFailure.BadResponse);
+        // A failure can arrive in a 200 response, as an error envelope instead of an HTTP error status.
+        if (root.TryGetProperty("error", out var error) && IsError(error)) throw ErrorEnvelope(error);
+        if (!root.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array ||
+            choices.GetArrayLength() == 0)
+            throw new ServiceException(ServiceFailure.BadResponse);
+        var choice = choices[0];
+        if (choice.ValueKind != JsonValueKind.Object) throw new ServiceException(ServiceFailure.BadResponse);
+        // A provider's error can also sit on the choice itself.
+        if (choice.TryGetProperty("error", out var choiceError) && IsError(choiceError)) throw ErrorEnvelope(choiceError);
+        // A reply cut off at the token limit is not valid JSON.
+        if (choice.TryGetProperty("finish_reason", out var finish) && finish.ValueKind == JsonValueKind.String &&
+            finish.ValueEquals("length"))
+            throw new ServiceException(ServiceFailure.BadResponse);
+        if (!choice.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.Object ||
+            !message.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.String)
+            throw new ServiceException(ServiceFailure.BadResponse);
+        return content.GetString()!;
+    }
+
+    // "error": null (or false) beside a reply is no error; an object or a message is one.
+    private static bool IsError(JsonElement error) => error.ValueKind is JsonValueKind.Object or JsonValueKind.String;
+
+    // An error envelope maps by its code ({"error":{"code":402,"message":"..."}}, the code a number or a numeric string):
+    // a rejected key, no credits left, and rate limiting tell the user something they can act on; any other code, or
+    // none, is an unusable response. The message is never kept: it can quote the request.
+    private static ServiceException ErrorEnvelope(JsonElement error)
+    {
+        int? status = null;
+        if (error.ValueKind == JsonValueKind.Object && error.TryGetProperty("code", out var code))
         {
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object) throw new ServiceException(ServiceFailure.BadResponse);
-            // Some failures arrive as an error object rather than an HTTP error status.
-            if (root.TryGetProperty("error", out var error) && error.ValueKind == JsonValueKind.Object)
-            {
-                var status = error.TryGetProperty("code", out var code) && code.ValueKind == JsonValueKind.Number &&
-                             code.TryGetInt32(out var parsed) ? parsed : (int?)null;
-                throw new ServiceException(status is { } s ? ServiceException.FailureForStatus(s) : ServiceFailure.BadResponse, status);
-            }
-            if (!root.TryGetProperty("choices", out var choices) || choices.ValueKind != JsonValueKind.Array ||
-                choices.GetArrayLength() == 0)
-                throw new ServiceException(ServiceFailure.BadResponse);
-            var choice = choices[0];
-            // A reply cut off at the token limit is not valid JSON.
-            if (choice.TryGetProperty("finish_reason", out var finish) && finish.ValueKind == JsonValueKind.String &&
-                finish.GetString() == "length")
-                throw new ServiceException(ServiceFailure.BadResponse);
-            if (!choice.TryGetProperty("message", out var message) || message.ValueKind != JsonValueKind.Object ||
-                !message.TryGetProperty("content", out var content) || content.ValueKind != JsonValueKind.String)
-                throw new ServiceException(ServiceFailure.BadResponse);
-            return content.GetString()!;
+            if (code.ValueKind == JsonValueKind.Number && code.TryGetInt32(out var number)) status = number;
+            else if (code.ValueKind == JsonValueKind.String &&
+                     int.TryParse(code.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var text))
+                status = text;
         }
+        var failure = status switch
+        {
+            401 or 403 => ServiceFailure.Unauthorized,
+            402 => ServiceFailure.PaymentRequired,
+            429 => ServiceFailure.RateLimited,
+            _ => ServiceFailure.BadResponse
+        };
+        return new ServiceException(failure, status);
     }
 }
