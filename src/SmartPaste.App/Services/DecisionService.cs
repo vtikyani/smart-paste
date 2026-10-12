@@ -50,15 +50,11 @@ internal sealed class DecisionService : IDisposable
         return decision;
     }
 
-    // The user chose a value in a picker: the label is learned for the offline fallback. A "label" that is really one
-    // of the copied values (OCR read the neighbouring field's text) is never written to disk.
-    public void LearnChoice(FieldContext field, Candidate chosen, Profile profile)
-    {
-        if (field.LearnableLabel() is not { } label) return;
-        var normalized = LabelNormalizer.Normalize(label);
-        if (profile.Entities.SelectMany(e => e.Fields.Values).Any(value => LabelNormalizer.Normalize(value) == normalized)) return;
-        new FieldDecider(Labels, null).LearnChoice(field, chosen);
-    }
+    // The user chose a value in a picker: the label is learned for the offline fallback. Core decides what may be
+    // learned: never a label that is (or contains) one of the copied values, an OCR reading, a built-in or vague label,
+    // or one about someone else.
+    public void LearnChoice(FieldContext field, Candidate chosen, Profile profile) =>
+        new FieldDecider(Labels, null).LearnChoice(field, chosen, profile);
 
     private void Record(Decision decision)
     {
