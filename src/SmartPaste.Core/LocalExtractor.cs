@@ -199,11 +199,13 @@ public static partial class LocalExtractor
         if (!fields.ContainsKey(FieldKeys.FullName) && !fields.ContainsKey(FieldKeys.FirstName) && SectionName(section) is { } name)
             fields[FieldKeys.FullName] = name;
 
-        var fast = TextHeuristics.Extract(string.Join('\n', lines));
-        Fill(FieldKeys.Email, fast.Email);
-        Fill(FieldKeys.Phone, fast.Phone);
-        Fill(FieldKeys.Linkedin, fast.Linkedin);
-        if (!string.Equals(fast.Website, fast.Linkedin, StringComparison.OrdinalIgnoreCase)) Fill(FieldKeys.Website, fast.Website);
+        var text = string.Join('\n', lines);
+        var website = TextHeuristics.FindWebsite(text);
+        var linkedin = TextHeuristics.FindLinkedin(text);
+        Fill(FieldKeys.Email, TextHeuristics.FindEmail(text));
+        Fill(FieldKeys.Phone, TextHeuristics.FindPhone(lines));
+        Fill(FieldKeys.Linkedin, linkedin);
+        if (!string.Equals(website, linkedin, StringComparison.OrdinalIgnoreCase)) Fill(FieldKeys.Website, website);
 
         void Fill(string key, string? value)
         {

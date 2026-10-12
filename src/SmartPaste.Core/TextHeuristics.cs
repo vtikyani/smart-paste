@@ -39,11 +39,7 @@ public static partial class TextHeuristics
         ArgumentNullException.ThrowIfNull(text);
         var lines = LabelLines.SplitLines(text);
         return new FastFields(
-            FindEmail(text),
-            FindPhone(lines),
-            AddressPatterns.Read(lines).Place?.Zip,
-            FindLink(LinkRegex(), text),
-            FindLink(LinkedinRegex(), text));
+            FindEmail(text), FindPhone(lines), AddressPatterns.Read(lines).Place?.Zip, FindWebsite(text), FindLinkedin(text));
     }
 
     // True for a block of someone's contact details: at least two personal contact signals (CountContactSignals). Prose
@@ -119,6 +115,11 @@ public static partial class TextHeuristics
 
     // Every email address in the text.
     internal static IEnumerable<string> FindEmails(string text) => EmailRegex().Matches(text).Select(match => match.Value);
+
+    // The first link (which can be a LinkedIn link), and the first LinkedIn link.
+    internal static string? FindWebsite(string text) => FindLink(LinkRegex(), text);
+
+    internal static string? FindLinkedin(string text) => FindLink(LinkedinRegex(), text);
 
     // True when the whole value is a phone number written like one.
     internal static bool IsWrittenPhone(string value) => WholePhoneRegex().IsMatch(value);
