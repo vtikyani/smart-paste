@@ -61,6 +61,71 @@ public class OpenRouterParserTests
         Assert.Empty(profile.ValuesFor(FieldKeys.Phone));
     }
 
+    private static string SentText(FakeHttp http)
+    {
+        using var body = JsonDocument.Parse(Assert.Single(http.Requests).Body!);
+        return body.RootElement.GetProperty("messages")[1].GetProperty("content").GetString()!;
+    }
+
+    [Fact]
+    public async Task SecretsNeverLeaveThePc()
+    {
+        const string text = "Jordan Rivera, jordan@example.com, 201-555-0100\nRouting number: 021000021\nAccount number: 123456789\n" +
+                            "Paid with 4111 1111 1111 1111, SSN 123-45-6789\nIBAN DE89 3704 0044 0532 0130 00\nPassword\nhunter2";
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply(Entities));
+        await new OpenRouterParser(http.Client(), "k").ParseTextAsync(text, DateTimeOffset.UtcNow, CancellationToken.None);
+
+        var sent = SentText(http);
+        Assert.Contains("Jordan Rivera, jordan@example.com, 201-555-0100", sent, StringComparison.Ordinal);
+        Assert.Contains("Paid with " + Redaction.Mask + ", SSN " + Redaction.Mask, sent, StringComparison.Ordinal);
+        foreach (var secret in new[] { "021000021", "123456789", "4111", "123-45-6789", "DE89", "3704", "Routing", "Account number", "hunter2" })
+            Assert.DoesNotContain(secret, sent, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task BankDetailsTheModelReturnsAreDropped()
+    {
+        const string text = "Jordan Rivera, jordan@example.com\nRouting number: 021000021 / Account number: 123456789";
+        const string reply = "{\"entities\":[{\"label\":\"person\",\"fields\":[{\"key\":\"full_name\",\"value\":\"Jordan Rivera\"}," +
+                             "{\"key\":\"email\",\"value\":\"jordan@example.com\"},{\"key\":\"account_number\",\"value\":\"123456789\"}," +
+                             "{\"key\":\"routing_number\",\"value\":\"021000021\"}]}]}";
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply(reply));
+        var profile = await new OpenRouterParser(http.Client(), "k").ParseTextAsync(text, DateTimeOffset.UtcNow, CancellationToken.None);
+
+        Assert.Empty(profile.ValuesFor("account_number"));
+        Assert.Empty(profile.ValuesFor("routing_number"));
+        Assert.Equal("jordan@example.com", profile.ValuesFor(FieldKeys.Email).Single().Value);
+        Assert.DoesNotContain("021000021", SentText(http), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task TheMaskNeverComesBackAsAValue()
+    {
+        var reply = "{\"entities\":[{\"label\":\"person\",\"fields\":{\"email\":\"jordan@example.com\",\"note\":\"" + Redaction.Mask + "\"}}]}";
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply(reply));
+        var profile = await new OpenRouterParser(http.Client(), "k")
+            .ParseTextAsync("jordan@example.com, card 4111 1111 1111 1111", DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.Empty(profile.ValuesFor("note"));
+        Assert.Single(profile.ValuesFor(FieldKeys.Email));
+    }
+
+    [Fact]
+    public async Task TextOfOnlySecretsIsNotSent()
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply(Entities));
+        var profile = await new OpenRouterParser(http.Client(), "k")
+            .ParseTextAsync("Card number: 4111 1111 1111 1111\nCVV: 123\n4111-1111-1111-1111", DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.Empty(http.Requests);
+        Assert.Empty(profile.Entities);
+    }
+
+    [Fact]
+    public void ThePromptNamesEverySecret()
+    {
+        foreach (var term in new[] { "passwords", "PINs", "card numbers", "CVV", "bank account", "routing", "IBAN", "social security", "one-time", "security questions" })
+            Assert.Contains(term, OpenRouterParser.SystemPrompt, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task ObjectShapedFieldsInProseStillParse()
     {

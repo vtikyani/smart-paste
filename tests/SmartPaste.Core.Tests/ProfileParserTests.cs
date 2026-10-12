@@ -56,6 +56,31 @@ public class ProfileParserTests
     }
 
     [Fact]
+    public void SecretKeysAndValuesNeverEnterAProfile()
+    {
+        // The source still holds the secrets here (no redaction), so grounding alone would keep them.
+        const string source = "Jordan Rivera, jordan@example.com\nRouting number: 021000021 / Account number: 123456789\n" +
+                              "PIN: 4821\nFavourite colour: teal\nCard 4111 1111 1111 1111, SSN 123-45-6789";
+        const string reply = "{\"entities\":[{\"label\":\"person\",\"fields\":{\"full_name\":\"Jordan Rivera\"," +
+                             "\"account_number\":\"123456789\",\"routing_number\":\"021000021\",\"pin\":\"4821\",\"acct_no\":\"123456789\"," +
+                             "\"favourite_colour\":\"teal\",\"note\":\"Card 4111 1111 1111 1111\",\"company\":\"SSN 123-45-6789\"}}]}";
+        var p = ProfileParser.ParseGrounded(reply, source, Now);
+
+        foreach (var key in new[] { "account_number", "routing_number", "pin", "acct_no", "note", FieldKeys.Company })
+            Assert.Empty(p.ValuesFor(key));
+        Assert.Equal("teal", p.ValuesFor("favourite_colour").Single().Value);
+        Assert.Equal("Jordan Rivera", p.ValuesFor(FieldKeys.FullName).Single().Value);
+    }
+
+    [Fact]
+    public void ACardNumberIsNotAPhoneNumber()
+    {
+        var p = ProfileParser.Parse("{\"entities\":[{\"label\":\"person\",\"fields\":{\"phone\":\"4111 1111 1111 1111\"}}," +
+                                    "{\"label\":\"work\",\"fields\":{\"phone\":\"+4111111111111111\"}}]}", Now);
+        Assert.Equal("+4111111111111111", p.ValuesFor(FieldKeys.Phone).Single().Value);
+    }
+
+    [Fact]
     public void MergeFillsGapsFromTheLocalProfile()
     {
         var llm = ProfileParser.Parse("{\"entities\":[{\"label\":\"person\",\"fields\":{\"email\":\"a@b.com\",\"city\":\"Springfield\"}},{\"label\":\"shipping address\",\"fields\":{\"street\":\"2 Oak Ave\"}}]}", Now);

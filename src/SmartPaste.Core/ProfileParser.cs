@@ -10,7 +10,8 @@ public static class ProfileParser
     public static Profile Parse(string llmContent, DateTimeOffset now) => Build(ParseEntities(llmContent), now);
 
     // Like Parse, but values that do not appear in the source text are dropped (see ProfileGrounding). Grounding runs
-    // before names are derived, so a full name built from a grounded first and last name stays.
+    // before names are derived, so a full name built from a grounded first and last name stays. Like every profile
+    // built here, it never holds a secret (see WithoutSecrets).
     public static Profile ParseGrounded(string llmContent, string sourceText, DateTimeOffset now)
     {
         var grounding = new ProfileGrounding(sourceText);
@@ -120,7 +121,23 @@ public static class ProfileParser
     }
 
     private static Profile Build(IEnumerable<Entity> entities, DateTimeOffset now) =>
-        new(entities.Select(ProfileNormalizer.Normalize).Where(e => e.Fields.Count > 0).ToArray(), now);
+        new(entities.Select(WithoutSecrets).Select(ProfileNormalizer.Normalize).Where(e => e.Fields.Count > 0).ToArray(), now);
+
+    // Whatever a model returns, a profile keeps the standard keys and only those extra keys that do not name a secret
+    // ("account_number", "routing_number", "pin"), and no value that holds a card number, an SSN, or an IBAN. A phone
+    // number written with its country code ("+86 138 0013 8000") skips the card check: a long one can pass it.
+    private static Entity WithoutSecrets(Entity entity)
+    {
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in entity.Fields)
+        {
+            if (!FieldKeys.Standard.Contains(key) && Redaction.IsSensitiveLabel(LabelNormalizer.Humanize(key))) continue;
+            var international = key == FieldKeys.Phone && value.TrimStart().StartsWith('+');
+            if (Redaction.HasSensitiveNumber(value, cards: !international)) continue;
+            fields[key] = value;
+        }
+        return fields.Count == entity.Fields.Count ? entity : new Entity(entity.Label, fields);
+    }
 
     private static string ExtractObject(string content)
     {
