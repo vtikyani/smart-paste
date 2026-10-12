@@ -95,7 +95,8 @@ internal sealed class AppHost : IDisposable
     {
         Log.Event("app_start", ("version", AppInfo.Version), ("kind", Program.Launch));
         if (Settings.IsFirstRun) TrySaveFirstRunSettings();
-        ApplyStartAtLogin(Settings.Current.StartAtLogin);
+        var startAtLogin = Settings.Current.StartAtLogin;
+        UpdateStartAtLogin(() => StartupRegistration.Refresh(startAtLogin));
 
         Controller.ClearRequested += (_, _) => _profiles.Clear();
         // The tray's Exit, and the updater handing over to the new version.
@@ -154,7 +155,9 @@ internal sealed class AppHost : IDisposable
 
         _shortcuts.Apply(settings, active, HotkeyBox.IsAnyRecording);
 
-        if (previous is not null && previous.StartAtLogin != settings.StartAtLogin) ApplyStartAtLogin(settings.StartAtLogin);
+        // Only the user changes this setting, so it also overrides an "off" chosen earlier in Windows.
+        if (previous is not null && previous.StartAtLogin != settings.StartAtLogin)
+            UpdateStartAtLogin(() => StartupRegistration.Apply(settings.StartAtLogin));
         _prefetch.Refresh();
     }
 
@@ -187,11 +190,11 @@ internal sealed class AppHost : IDisposable
         }
     }
 
-    private static void ApplyStartAtLogin(bool enabled)
+    private static void UpdateStartAtLogin(Action update)
     {
         try
         {
-            StartupRegistration.Apply(enabled);
+            update();
         }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException or IOException)
         {

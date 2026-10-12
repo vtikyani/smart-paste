@@ -45,6 +45,8 @@ internal sealed partial class OnboardingViewModel : ObservableObject, IDisposabl
         OpenRouterKey.PropertyChanged += OnKeyChanged;
         context.Services.Settings.Changed += OnSettingsChanged;
         BlockLifetime = StatusText.Minutes(context.Settings.ProfileLifetimeMinutes);
+        // As things are now (on at first run), so taking the tour again never turns it back on by itself.
+        StartAtLogin = StartupRegistration.IsEnabledOr(context.Settings.StartAtLogin);
         RefreshDots();
     }
 
@@ -72,7 +74,7 @@ internal sealed partial class OnboardingViewModel : ObservableObject, IDisposabl
 
     // Applied when the tour finishes, not before: closing early keeps whatever was set already.
     [ObservableProperty]
-    public partial bool StartAtLogin { get; set; } = true;
+    public partial bool StartAtLogin { get; set; }
 
     // "15 minutes", for the privacy step.
     [ObservableProperty]
