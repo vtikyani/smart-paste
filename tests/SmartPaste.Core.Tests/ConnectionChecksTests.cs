@@ -50,11 +50,61 @@ public class ConnectionChecksTests
         Assert.Equal(new KeyCheckResult(false, failure, message), result);
     }
 
-    [Fact]
-    public async Task OpenRouterOddBodyIsBadResponse()
+    [Theory]
+    [InlineData("<html/>")]
+    [InlineData("[]")]
+    [InlineData("\"ok\"")]
+    [InlineData("{\"data\":[]}")]
+    public async Task OpenRouterOddBodyIsBadResponse(string body)
     {
-        var result = await ConnectionChecks.CheckOpenRouterKeyAsync(FakeHttp.Reply(HttpStatusCode.OK, "<html/>").Client(), "k", CancellationToken.None);
+        var result = await ConnectionChecks.CheckOpenRouterKeyAsync(FakeHttp.Reply(HttpStatusCode.OK, body).Client(), "k", CancellationToken.None);
+        Assert.Equal(new KeyCheckResult(false, ServiceFailure.BadResponse, "OpenRouter sent an answer Smart Paste could not read. Try again later."), result);
+    }
+
+    [Fact]
+    public async Task OpenRouterValuesOfAnotherKindReadAsAbsent()
+    {
+        const string body = "{\"data\":{\"is_management_key\":\"yes\",\"limit_remaining\":\"lots\",\"effective_budget\":[1]}}";
+        var result = await ConnectionChecks.CheckOpenRouterKeyAsync(FakeHttp.Reply(HttpStatusCode.OK, body).Client(), "k", CancellationToken.None);
+        Assert.Equal(new KeyCheckResult(true, null, "Key works."), result);
+    }
+
+    [Fact]
+    public async Task UnknownCharsetIsBadResponseNotACrash()
+    {
+        var http = FakeHttp.Reply(_ => FakeHttp.ResponseWithCharset(GoodKey, "no-such-charset"));
+        var result = await ConnectionChecks.CheckOpenRouterKeyAsync(http.Client(), "k", CancellationToken.None);
         Assert.Equal(ServiceFailure.BadResponse, result.Failure);
+    }
+
+    [Fact]
+    public async Task ForbiddenSaysTheKeyIsNotAllowedRatherThanRejected()
+    {
+        const string message = "This key isn't allowed to make this request.";
+        var openRouter = await ConnectionChecks.CheckOpenRouterKeyAsync(FakeHttp.Reply(HttpStatusCode.Forbidden).Client(), "k", CancellationToken.None);
+        Assert.Equal(new KeyCheckResult(false, ServiceFailure.Unauthorized, message), openRouter);
+        var typeSafe = await ConnectionChecks.CheckTypeSafeKeyAsync(FakeHttp.Reply(HttpStatusCode.Forbidden).Client(), "k", CancellationToken.None);
+        Assert.Equal(new KeyCheckResult(false, ServiceFailure.Unauthorized, message), typeSafe);
+    }
+
+    [Theory]
+    [InlineData("{\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}", ServiceFailure.PaymentRequired, "This key has no credits left.")]
+    [InlineData("{\"error\":{\"code\":401,\"message\":\"User not found\"}}", ServiceFailure.Unauthorized, "{0} rejected this key.")]
+    [InlineData("{\"error\":{\"code\":429,\"message\":\"Slow down\"}}", ServiceFailure.RateLimited, "{0} is busy with too many requests. Try again in a minute.")]
+    public async Task ErrorEnvelopeSentWithHttp200IsTheFailureItNames(string body, ServiceFailure failure, string message)
+    {
+        var openRouter = await ConnectionChecks.CheckOpenRouterKeyAsync(FakeHttp.Reply(HttpStatusCode.OK, body).Client(), "k", CancellationToken.None);
+        Assert.Equal(new KeyCheckResult(false, failure, string.Format(message, "OpenRouter")), openRouter);
+        var typeSafe = await ConnectionChecks.CheckTypeSafeKeyAsync(FakeHttp.Reply(HttpStatusCode.OK, body).Client(), "k", CancellationToken.None);
+        Assert.Equal(new KeyCheckResult(false, failure, string.Format(message, "TypeSafe")), typeSafe);
+    }
+
+    [Fact]
+    public async Task TypeSafeKeyWorksWhateverTheSuccessBody()
+    {
+        // Only the status matters for this check, so a body it cannot parse is not a failure.
+        var result = await ConnectionChecks.CheckTypeSafeKeyAsync(FakeHttp.Reply(HttpStatusCode.OK, "[]").Client(), "k", CancellationToken.None);
+        Assert.Equal(new KeyCheckResult(true, null, "Key works."), result);
     }
 
     [Fact]

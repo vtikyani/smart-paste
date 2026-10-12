@@ -1,6 +1,8 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Sockets;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 
 namespace SmartPaste.Core;
@@ -11,7 +13,7 @@ public enum ServiceFailure
 {
     // No key is saved for the service.
     NoKey,
-    // The service rejected the key (HTTP 401 or 403).
+    // The service rejected the key (HTTP 401), or does not allow it to make this request (HTTP 403).
     Unauthorized,
     // The account behind the key has no credits left (HTTP 402).
     PaymentRequired,
@@ -74,6 +76,8 @@ public sealed class ServiceException : Exception
         var text = failure switch
         {
             ServiceFailure.NoKey => "No API key is saved for this service.",
+            // 403: the key is known, but it may not make this request (a restricted or limited key).
+            ServiceFailure.Unauthorized when statusCode == 403 => "The service does not allow this API key to make this request.",
             ServiceFailure.Unauthorized => "The service rejected the API key.",
             ServiceFailure.PaymentRequired => "The account has no credits left.",
             ServiceFailure.RateLimited => "The service is rate limiting requests.",
@@ -103,7 +107,7 @@ internal static class ServiceHttp
                 var status = (int)response.StatusCode;
                 throw new ServiceException(ServiceException.FailureForStatus(status), status);
             }
-            return await response.Content.ReadAsStringAsync(requestToken).ConfigureAwait(false);
+            return await ReadBodyAsync(response.Content, requestToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (callerToken.IsCancellationRequested)
         {
@@ -121,6 +125,94 @@ internal static class ServiceHttp
         catch (Exception ex) when (ex is IOException or SocketException)
         {
             throw new ServiceException(ServiceFailure.Network, null, ex);
+        }
+    }
+
+    // Parses a successful response body and hands its root to read. Whatever shape the body has, the only exceptions
+    // that leave are ServiceExceptions: a body that is not JSON, or that read finds in a shape it does not expect (an
+    // array where an object belongs), is BadResponse; an error envelope sent with HTTP 200 is the failure its code
+    // names (see ErrorIn). Nothing from the body ends up in an exception message.
+    public static T ReadJson<T>(string body, Func<JsonElement, T> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(body ?? "");
+        }
+        catch (JsonException)
+        {
+            // The parser's message can quote the body, so it is not kept.
+            throw new ServiceException(ServiceFailure.BadResponse);
+        }
+
+        using (document)
+        {
+            if (ErrorIn(document.RootElement) is { } error) throw error;
+            try
+            {
+                return read(document.RootElement);
+            }
+            catch (Exception ex) when (ex is InvalidOperationException or JsonException or FormatException or
+                                           ArgumentException or KeyNotFoundException or IndexOutOfRangeException)
+            {
+                // JsonElement throws InvalidOperationException when a value has another kind than the reader assumed.
+                throw new ServiceException(ServiceFailure.BadResponse);
+            }
+        }
+    }
+
+    // The failure an error envelope names, or null when the body is not one. Some services answer HTTP 200 with
+    // {"error":{"code":402,"message":"..."}}: the code maps like an HTTP status (401/403 rejected key, 402 no
+    // credits, 429 rate limited); an envelope without a usable code is BadResponse.
+    public static ServiceException? ErrorIn(JsonElement root)
+    {
+        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("error", out var error) ||
+            error.ValueKind != JsonValueKind.Object)
+            return null;
+        return (Code(error, "code") ?? Code(error, "status")) is { } status
+            ? new ServiceException(ServiceException.FailureForStatus(status), status)
+            : new ServiceException(ServiceFailure.BadResponse);
+    }
+
+    // As above, for a body whose content is otherwise not needed (a key check). Null when it is not JSON.
+    public static ServiceException? ErrorIn(string body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body ?? "");
+            return ErrorIn(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    // An HTTP-like status code (100 to 599), as a number or a numeric string.
+    private static int? Code(JsonElement error, string name)
+    {
+        if (!error.TryGetProperty(name, out var value)) return null;
+        var code = value.ValueKind switch
+        {
+            JsonValueKind.Number when value.TryGetInt32(out var number) => number,
+            JsonValueKind.String when int.TryParse(value.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var number) => number,
+            _ => (int?)null
+        };
+        return code is >= 100 and <= 599 ? code : null;
+    }
+
+    // The body as text. An unknown charset in Content-Type makes ReadAsStringAsync throw InvalidOperationException:
+    // that is an unusable answer from the service, not a bug here.
+    private static async Task<string> ReadBodyAsync(HttpContent content, CancellationToken token)
+    {
+        try
+        {
+            return await content.ReadAsStringAsync(token).ConfigureAwait(false);
+        }
+        catch (InvalidOperationException)
+        {
+            throw new ServiceException(ServiceFailure.BadResponse);
         }
     }
 
