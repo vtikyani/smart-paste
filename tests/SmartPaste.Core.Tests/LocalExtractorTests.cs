@@ -94,6 +94,24 @@ public class LocalExtractorTests
         Assert.Null(Value(LocalExtractor.Extract(text, Now), FieldKeys.FullName));
 
     [Fact]
+    public void SomeoneElsesLinesAreNeverReadAsTheUsers()
+    {
+        const string text = """
+            Jordan Rivera
+            jordan@example.com
+            Emergency contact: Sam Lee, 201-555-0199
+            Reference address: 9 Elm St, Trenton, NJ 08608
+            Password: Tr0ub4dor 5 Main St
+            """;
+        var profile = LocalExtractor.Extract(text, Now);
+        Assert.Equal("Jordan Rivera", Value(profile, FieldKeys.FullName));
+        Assert.Null(Value(profile, FieldKeys.Phone));
+        Assert.Null(Value(profile, FieldKeys.Street));
+        Assert.Null(Value(profile, FieldKeys.City));
+        Assert.Null(Value(profile, FieldKeys.Zip));
+    }
+
+    [Fact]
     public void NameWithApostropheAndInitial() =>
         Assert.Equal("Siobhan J. O'Brien", Value(LocalExtractor.Extract("Siobhan J. O'Brien\nv@example.com\n201-555-0100", Now), FieldKeys.FullName));
 

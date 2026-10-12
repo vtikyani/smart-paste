@@ -39,21 +39,31 @@ public static partial class LocalExtractor
     {
         var entities = new EntityBuilder();
         var lines = LabelLines.SplitLines(text);
+        // Lines already read through their label, and lines that must not be read at all.
         var labeledLines = new HashSet<int>();
+        var offLimits = new HashSet<int>();
 
         foreach (var line in LabelLines.Find(lines))
         {
+            if (LabelLines.IsOffLimits(line.Label))
+            {
+                // "Emergency contact: Sam, 201-555-0199": that phone is not the user's, so the whole line is skipped.
+                offLimits.Add(line.LineIndex);
+                continue;
+            }
             if (LabelLines.Map(line.Label) is not { } mapping) continue;
             labeledLines.Add(line.LineIndex);
             AddLabeled(entities.For(mapping.Entity ?? Person), mapping.Key, line.Value);
         }
 
+        // Everything below reads free text, with off-limits lines blanked (line numbers stay the same).
+        var free = lines.Select((line, index) => offLimits.Contains(index) ? "" : line).ToArray();
         var person = entities.For(Person);
-        ReadAddress(lines, labeledLines, person);
+        ReadAddress(free, labeledLines, person);
         if (!person.ContainsKey(FieldKeys.FullName) && !person.ContainsKey(FieldKeys.FirstName) &&
-            NameFromFirstLine(lines, labeledLines) is { } name)
+            NameFromFirstLine(free, labeledLines) is { } name)
             person[FieldKeys.FullName] = name;
-        AddFastFields(TextHeuristics.Extract(text), entities, person);
+        AddFastFields(TextHeuristics.Extract(string.Join('\n', free)), entities, person);
 
         return new Profile(entities.Build(), now);
     }

@@ -36,12 +36,19 @@ internal static partial class LabelLines
         }
     }
 
-    // Null for labels that are not recognized, are sensitive, or are about someone else (emergency contact).
+    // Labels whose values must never be read as the user's details: sensitive ones (password, card number) and
+    // ones about someone else (emergency contact, reference).
+    public static bool IsOffLimits(string label)
+    {
+        var normalized = LabelNormalizer.Normalize(label);
+        return KeywordRules.IsSensitive(normalized) || KeywordRules.IsAboutSomeoneElse(normalized);
+    }
+
+    // Null for labels that are not recognized or are off limits.
     public static Mapping? Map(string label)
     {
         var normalized = LabelNormalizer.Normalize(label);
-        if (normalized.Length == 0 || KeywordRules.IsSensitive(normalized) || KeywordRules.IsAboutSomeoneElse(normalized))
-            return null;
+        if (normalized.Length == 0 || IsOffLimits(normalized)) return null;
         string? entity = null;
         string? rest = null;
         var space = normalized.IndexOf(' ');
