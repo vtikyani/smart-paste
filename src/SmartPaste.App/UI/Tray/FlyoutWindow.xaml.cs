@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -23,6 +24,8 @@ internal partial class FlyoutWindow
     private TaskbarPosition? _taskbar;
     private long _hiddenAt;
     private bool _shuttingDown;
+    private IntPtr _foregroundHook;
+    private NativeMethods.WinEventProc? _foregroundChanged;
 
     public FlyoutWindow(FlyoutViewModel viewModel)
     {
@@ -81,8 +84,9 @@ internal partial class FlyoutWindow
 
         Root.Opacity = 0;
         Show();
-        Activate();
-        WindowInterop.BringToForeground(Handle);
+        // A click on the tray icon lets the flyout take focus. Other requests (a second launch of the app) may
+        // not; then it can never lose focus, so it closes when another window comes to the front instead.
+        if (!Activate() && !WindowInterop.BringToForeground(Handle)) WatchForeground();
         Reposition();
         PlayEnter();
     }
@@ -102,6 +106,7 @@ internal partial class FlyoutWindow
     // Hides the flyout; it is reused, never closed.
     public void Dismiss(bool byDeactivation = false)
     {
+        StopWatchingForeground();
         if (!IsVisible) return;
         if (byDeactivation) _hiddenAt = Environment.TickCount64;
         Root.BeginAnimation(OpacityProperty, null);
@@ -133,9 +138,34 @@ internal partial class FlyoutWindow
         EnterOffset.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(dy, 0, duration) { EasingFunction = ease });
     }
 
+    private void WatchForeground()
+    {
+        if (_foregroundHook != IntPtr.Zero) return;
+        // Kept in a field: the native hook calls it long after this method returns.
+        _foregroundChanged ??= (_, _, hwnd, _, _, _, _) =>
+        {
+            if (hwnd != Handle) Dismiss(byDeactivation: true);
+        };
+        // Out of context: the callback arrives on this (UI) thread through its message loop. Skipping our own
+        // process keeps a click into the flyout itself from closing it.
+        _foregroundHook = NativeMethods.SetWinEventHook(NativeMethods.EventSystemForeground, NativeMethods.EventSystemForeground,
+            IntPtr.Zero, _foregroundChanged, 0, 0, NativeMethods.WinEventOutOfContext | NativeMethods.WinEventSkipOwnProcess);
+    }
+
+    private void StopWatchingForeground()
+    {
+        if (_foregroundHook == IntPtr.Zero) return;
+        NativeMethods.UnhookWinEvent(_foregroundHook);
+        _foregroundHook = IntPtr.Zero;
+    }
+
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
-        if (_shuttingDown) return;
+        if (_shuttingDown)
+        {
+            StopWatchingForeground();
+            return;
+        }
         e.Cancel = true;
         Dismiss();
     }
@@ -152,5 +182,21 @@ internal partial class FlyoutWindow
         if (PauseButton.ContextMenu is not { } menu) return;
         menu.PlacementTarget = PauseButton;
         menu.IsOpen = true;
+    }
+
+    private static class NativeMethods
+    {
+        public const uint EventSystemForeground = 0x0003;
+        public const uint WinEventOutOfContext = 0x0000;
+        public const uint WinEventSkipOwnProcess = 0x0002;
+
+        public delegate void WinEventProc(IntPtr hook, uint eventType, IntPtr hwnd, int objectId, int childId, uint thread, uint time);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr module, WinEventProc callback, uint processId, uint threadId, uint flags);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool UnhookWinEvent(IntPtr hook);
     }
 }

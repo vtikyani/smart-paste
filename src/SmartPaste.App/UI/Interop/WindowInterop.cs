@@ -42,7 +42,8 @@ internal static class WindowInterop
     public static (int X, int Y) GetCursorPosition() =>
         NativeMethods.GetCursorPos(out var p) ? (p.X, p.Y) : (0, 0);
 
-    public static void BringToForeground(IntPtr hwnd) => NativeMethods.SetForegroundWindow(hwnd);
+    // False when Windows refused, which it does unless the request follows the user's own input.
+    public static bool BringToForeground(IntPtr hwnd) => NativeMethods.SetForegroundWindow(hwnd);
 
     private static IntPtr GetWindowLong(IntPtr hwnd, int index) =>
         IntPtr.Size == 8 ? NativeMethods.GetWindowLongPtr64(hwnd, index) : NativeMethods.GetWindowLong32(hwnd, index);
