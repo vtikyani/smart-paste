@@ -1,0 +1,46 @@
+<!-- Brand brushes for Windows high contrast: every key maps to the user's system colors, and nothing is
+     translucent or shadowed. The theme service reloads this dictionary on each change, so the x:Static values
+     always reflect the current contrast theme. -->
+<ResourceDictionary
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+  xmlns:brand="clr-namespace:SmartPaste.App.UI.Brand">
+
+  <SolidColorBrush x:Key="Brand.HighlightFillBrush" Color="{x:Static SystemColors.HighlightColor}" />
+  <SolidColorBrush x:Key="Brand.HighlightTextBrush" Color="{x:Static SystemColors.HighlightTextColor}" />
+  <SolidColorBrush x:Key="Brand.HighlightWashBrush" Color="{x:Static SystemColors.WindowColor}" />
+
+  <SolidColorBrush x:Key="Brand.PopupSurfaceBrush" Color="{x:Static SystemColors.WindowColor}" />
+  <SolidColorBrush x:Key="Brand.PopupBorderBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.PopupTextBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.PopupSubtleTextBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.PopupHoverBrush" Color="{x:Static SystemColors.WindowColor}" />
+  <SolidColorBrush x:Key="Brand.PopupSelectedBrush" Color="{x:Static SystemColors.HighlightColor}" />
+  <SolidColorBrush x:Key="Brand.PopupSelectedTextBrush" Color="{x:Static SystemColors.HighlightTextColor}" />
+  <SolidColorBrush x:Key="Brand.PopupDividerBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.KeyCapBrush" Color="{x:Static SystemColors.WindowColor}" />
+  <SolidColorBrush x:Key="Brand.KeyCapBorderBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.KeyCapTextBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <Color x:Key="Brand.ShadowColor">#00000000</Color>
+  <sys:Double x:Key="Brand.ShadowOpacity">0</sys:Double>
+
+  <SolidColorBrush x:Key="Brand.MarkBrush" Color="{x:Static SystemColors.HighlightColor}" />
+  <SolidColorBrush x:Key="Brand.OnMarkBrush" Color="{x:Static SystemColors.HighlightTextColor}" />
+
+  <SolidColorBrush x:Key="Brand.FlyoutFooterBrush" Color="{x:Static SystemColors.WindowColor}" />
+
+  <SolidColorBrush x:Key="Brand.SuccessBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.WarningBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.DangerBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+
+  <SolidColorBrush x:Key="Brand.LogoGlyphBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <DrawingImage x:Key="Brand.LogoMonoImage">
+    <DrawingImage.Drawing>
+      <DrawingGroup>
+        <GeometryDrawing Brush="Transparent" Geometry="M0,0 H16 V16 H0 Z" />
+        <GeometryDrawing Brush="{StaticResource Brand.LogoGlyphBrush}" Geometry="{x:Static brand:BrandArt.Glyph}" />
+      </DrawingGroup>
+    </DrawingImage.Drawing>
+  </DrawingImage>
+</ResourceDictionary>

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Renders the app icon and the logo images from the vector mark in src/SmartPaste.App/UI/Brand/BrandArt.cs.
+       Run it after changing the mark (dotnet run, with this project), and commit what it writes. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <IsPackable>false</IsPackable>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The same source the app compiles, so the icon can never drift from the in-app mark. -->
+    <Compile Include="..\..\src\SmartPaste.App\UI\Brand\BrandArt.cs" Link="BrandArt.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.IO" />
+  </ItemGroup>
+
+</Project>

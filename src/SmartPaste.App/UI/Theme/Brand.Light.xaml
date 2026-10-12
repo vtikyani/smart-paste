@@ -1,7 +1,10 @@
-<!-- Brand brushes for the light theme. Same keys as Brand.Dark.xaml; reference them with DynamicResource. -->
+<!-- Brand brushes for the light theme. Same keys as Brand.Dark.xaml and Brand.HighContrast.xaml; reference them
+     with DynamicResource. -->
 <ResourceDictionary
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+  xmlns:brand="clr-namespace:SmartPaste.App.UI.Brand">
 
   <!-- A highlighter mark behind text: the "this is the value" moment. -->
   <SolidColorBrush x:Key="Brand.HighlightFillBrush" Color="#FFE58A" />
@@ -14,10 +17,36 @@
   <SolidColorBrush x:Key="Brand.PopupBorderBrush" Color="#1A000000" />
   <SolidColorBrush x:Key="Brand.PopupTextBrush" Color="#15171F" />
   <SolidColorBrush x:Key="Brand.PopupSubtleTextBrush" Color="#5C6270" />
+  <SolidColorBrush x:Key="Brand.PopupHoverBrush" Color="#0A000000" />
+  <SolidColorBrush x:Key="Brand.PopupSelectedBrush" Color="#0D000000" />
+  <SolidColorBrush x:Key="Brand.PopupSelectedTextBrush" Color="#15171F" />
+  <SolidColorBrush x:Key="Brand.PopupDividerBrush" Color="#14000000" />
   <SolidColorBrush x:Key="Brand.KeyCapBrush" Color="#ECEEF2" />
+  <SolidColorBrush x:Key="Brand.KeyCapBorderBrush" Color="#D3D7DE" />
+  <SolidColorBrush x:Key="Brand.KeyCapTextBrush" Color="#3A3F4B" />
   <Color x:Key="Brand.ShadowColor">#40000000</Color>
+  <!-- Strength of the soft drop shadow under popups (DropShadowEffect ignores a color's alpha). -->
+  <sys:Double x:Key="Brand.ShadowOpacity">0.18</sys:Double>
+
+  <!-- Solid highlighter yellow with ink on top: the paste check, the "working" sweep, the time-left line. -->
+  <SolidColorBrush x:Key="Brand.MarkBrush" Color="#FFD43B" />
+  <SolidColorBrush x:Key="Brand.OnMarkBrush" Color="#15171F" />
+
+  <!-- The footer strip of the tray flyout, over its acrylic backdrop. -->
+  <SolidColorBrush x:Key="Brand.FlyoutFooterBrush" Color="#08000000" />
 
   <SolidColorBrush x:Key="Brand.SuccessBrush" Color="#1F9D57" />
   <SolidColorBrush x:Key="Brand.WarningBrush" Color="#B86E00" />
   <SolidColorBrush x:Key="Brand.DangerBrush" Color="#C93636" />
+
+  <!-- The monochrome mark in the theme's primary text color. -->
+  <SolidColorBrush x:Key="Brand.LogoGlyphBrush" Color="#E4000000" />
+  <DrawingImage x:Key="Brand.LogoMonoImage">
+    <DrawingImage.Drawing>
+      <DrawingGroup>
+        <GeometryDrawing Brush="Transparent" Geometry="M0,0 H16 V16 H0 Z" />
+        <GeometryDrawing Brush="{StaticResource Brand.LogoGlyphBrush}" Geometry="{x:Static brand:BrandArt.Glyph}" />
+      </DrawingGroup>
+    </DrawingImage.Drawing>
+  </DrawingImage>
 </ResourceDictionary>

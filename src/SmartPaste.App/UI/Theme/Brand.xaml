@@ -2,12 +2,14 @@
   Smart Paste design tokens that do not change with light/dark theme.
   The brand idea is a highlighter: ink plus highlighter yellow, marking the one value that belongs in a field.
   Interactive controls keep the Windows accent color (WPF-UI); brand yellow is for the logo and key moments.
-  Theme-dependent brushes live in Brand.Light.xaml / Brand.Dark.xaml under the same keys; use DynamicResource.
+  Theme-dependent brushes live in Brand.Light.xaml / Brand.Dark.xaml / Brand.HighContrast.xaml under the same
+  keys; use DynamicResource for those.
 -->
 <ResourceDictionary
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-  xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+  xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+  xmlns:brand="clr-namespace:SmartPaste.App.UI.Brand">
 
   <!-- Palette -->
   <Color x:Key="Brand.InkColor">#15171F</Color>
@@ -20,11 +22,16 @@
   <SolidColorBrush x:Key="Brand.HighlighterBrush" Color="{StaticResource Brand.HighlighterColor}" />
   <SolidColorBrush x:Key="Brand.HighlighterDeepBrush" Color="{StaticResource Brand.HighlighterDeepColor}" />
 
+  <!-- The full-color mark (clipboard, highlighted line, caret) on a square frame. Resolution independent. -->
+  <DrawingImage x:Key="Brand.LogoImage" Drawing="{x:Static brand:BrandArt.Logo}" />
+
   <!-- Shape -->
   <CornerRadius x:Key="Brand.RadiusSmall">6</CornerRadius>
   <CornerRadius x:Key="Brand.RadiusControl">8</CornerRadius>
   <CornerRadius x:Key="Brand.RadiusCard">12</CornerRadius>
   <CornerRadius x:Key="Brand.RadiusPopup">14</CornerRadius>
+  <!-- WPF shares an oversized radius out per side, so on a Border that is wider than tall this draws an ellipse,
+       not a pill. For true pills set controls:Pill.IsPill="True" on the Border instead. -->
   <CornerRadius x:Key="Brand.RadiusPill">999</CornerRadius>
 
   <!-- Spacing (4-point grid) -->

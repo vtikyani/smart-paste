@@ -10,8 +10,9 @@
         <ui:ThemesDictionary Theme="Dark" />
         <ui:ControlsDictionary />
         <ResourceDictionary Source="UI/Theme/Brand.xaml" />
-        <!-- Swapped for Brand.Light.xaml by the theme service when the app theme is light. -->
+        <!-- Swapped for Brand.Light.xaml or Brand.HighContrast.xaml by the theme service. -->
         <ResourceDictionary Source="UI/Theme/Brand.Dark.xaml" />
+        <ResourceDictionary Source="UI/Theme/Controls.xaml" />
       </ResourceDictionary.MergedDictionaries>
     </ResourceDictionary>
   </Application.Resources>

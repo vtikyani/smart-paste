@@ -1,0 +1,39 @@
+<!-- Default styles for Smart Paste's own small controls, shared by every window. Merged by App.xaml after the
+     brand dictionaries; theme-dependent values use DynamicResource so they follow the theme service. -->
+<ResourceDictionary
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:controls="clr-namespace:SmartPaste.App.UI.Controls">
+
+  <controls:VisibleWhenConverter x:Key="SmartPaste.VisibleWhen" />
+
+  <!-- A key cap: a small raised key with the key's name, like "Ctrl" or "V". -->
+  <Style TargetType="{x:Type controls:KeyCap}">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="Height" Value="20" />
+    <Setter Property="MinWidth" Value="20" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type controls:KeyCap}">
+          <Border
+            Padding="{TemplateBinding Padding}"
+            Background="{DynamicResource Brand.KeyCapBrush}"
+            BorderBrush="{DynamicResource Brand.KeyCapBorderBrush}"
+            BorderThickness="1,1,1,2"
+            CornerRadius="4">
+            <TextBlock
+              HorizontalAlignment="Center"
+              VerticalAlignment="Center"
+              FontFamily="{TemplateBinding FontFamily}"
+              FontSize="{TemplateBinding FontSize}"
+              FontWeight="SemiBold"
+              Foreground="{DynamicResource Brand.KeyCapTextBrush}"
+              Text="{TemplateBinding Text}" />
+          </Border>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+</ResourceDictionary>

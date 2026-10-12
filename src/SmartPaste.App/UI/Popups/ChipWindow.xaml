@@ -1,0 +1,90 @@
+<popups:PopupWindow
+  x:Class="SmartPaste.App.UI.Popups.ChipWindow"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:controls="clr-namespace:SmartPaste.App.UI.Controls"
+  xmlns:popups="clr-namespace:SmartPaste.App.UI.Popups"
+  Title="Smart Paste">
+
+  <Grid Margin="12,6,12,16" Opacity="0">
+    <Grid.RenderTransform>
+      <TranslateTransform />
+    </Grid.RenderTransform>
+
+    <Border controls:Pill.IsPill="True" Background="{DynamicResource Brand.PopupSurfaceBrush}">
+      <Border.Effect>
+        <DropShadowEffect
+          BlurRadius="14"
+          Direction="270"
+          Opacity="{DynamicResource Brand.ShadowOpacity}"
+          RenderingBias="Quality"
+          ShadowDepth="3"
+          Color="Black" />
+      </Border.Effect>
+    </Border>
+
+    <Border
+      x:Name="Pill"
+      Height="30"
+      Padding="10,0,13,0"
+      Background="{DynamicResource Brand.PopupSurfaceBrush}"
+      BorderBrush="{DynamicResource Brand.PopupBorderBrush}"
+      controls:Pill.IsPill="True"
+      BorderThickness="1"
+      TextElement.FontFamily="{StaticResource Brand.FontText}"
+      TextElement.FontSize="12">
+      <Grid VerticalAlignment="Center">
+        <!-- Working: the highlighter sweeps while a decision takes a moment. -->
+        <StackPanel x:Name="Working" Orientation="Horizontal">
+          <controls:ThinkingMark
+            Width="20"
+            Height="12"
+            VerticalAlignment="Center"
+            CaretBrush="{DynamicResource Brand.PopupTextBrush}"
+            Fill="{DynamicResource Brand.MarkBrush}" />
+          <TextBlock
+            Margin="8,0,0,0"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brand.PopupTextBrush}"
+            Text="Thinking" />
+        </StackPanel>
+
+        <!-- Pasted: a highlighter check and what went into the field. -->
+        <StackPanel x:Name="Pasted" Orientation="Horizontal">
+          <Grid Width="18" Height="18" VerticalAlignment="Center">
+            <Ellipse Fill="{DynamicResource Brand.MarkBrush}" />
+            <Path
+              Data="M5.2,9.4 L7.9,12.1 L12.9,6.6"
+              Stroke="{DynamicResource Brand.OnMarkBrush}"
+              StrokeEndLineCap="Round"
+              StrokeLineJoin="Round"
+              StrokeStartLineCap="Round"
+              StrokeThickness="1.7" />
+          </Grid>
+          <TextBlock
+            x:Name="PastedText"
+            Margin="8,0,0,0"
+            VerticalAlignment="Center"
+            FontWeight="SemiBold"
+            Foreground="{DynamicResource Brand.PopupTextBrush}" />
+        </StackPanel>
+
+        <!-- Field hint: what Ctrl+V will paste here. -->
+        <StackPanel x:Name="Hint" Orientation="Horizontal">
+          <controls:KeyCap Height="18" FontSize="10.5" Text="Ctrl+V" />
+          <TextBlock
+            x:Name="HintName"
+            Margin="8,0,0,0"
+            VerticalAlignment="Center"
+            FontWeight="SemiBold"
+            Foreground="{DynamicResource Brand.PopupTextBrush}" />
+          <TextBlock
+            x:Name="HintValue"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brand.PopupSubtleTextBrush}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+  </Grid>
+</popups:PopupWindow>
