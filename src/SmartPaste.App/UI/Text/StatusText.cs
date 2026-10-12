@@ -23,7 +23,8 @@ internal static class StatusText
     // The tray tooltip: one plain line, for example "Smart Paste: 8 fields armed, 12 min left".
     public static string Tooltip(AppState state, DateTimeOffset now, CultureInfo culture)
     {
-        var detail = state.Status switch
+        var status = state.StatusAt(now);
+        var detail = status switch
         {
             TrayStatus.Off => "off",
             TrayStatus.Paused => "paused until " + Until(state.PausedUntil ?? now, now, culture),
@@ -32,7 +33,7 @@ internal static class StatusText
             TrayStatus.Armed => Armed(state.Armed!, now),
             _ => "ready"
         };
-        if (state.Status == TrayStatus.Attention && state.Armed is { } armed) detail += "; " + Armed(armed, now);
+        if (status == TrayStatus.Attention && state.Armed is { } armed) detail += "; " + Armed(armed, now);
         return $"{Product}: {detail}";
     }
 

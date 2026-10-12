@@ -95,16 +95,17 @@ public sealed partial class AppState : ObservableObject
     // Newest first.
     public ObservableCollection<ActivityEntry> Recent { get; } = [];
 
-    public TrayStatus Status
+    public TrayStatus Status => StatusAt(DateTimeOffset.Now);
+
+    // The status at a given moment: a pause counts only until it ends. Text built for a given time (the tray
+    // tooltip) asks with that same time, so the two can never disagree.
+    public TrayStatus StatusAt(DateTimeOffset now)
     {
-        get
-        {
-            if (!IsEnabled) return TrayStatus.Off;
-            if (PausedUntil is { } until && until > DateTimeOffset.Now) return TrayStatus.Paused;
-            if (NeedsAttention(ParsingStatus) || NeedsAttention(JevStatus)) return TrayStatus.Attention;
-            if (IsParsing) return TrayStatus.Parsing;
-            return Armed is null ? TrayStatus.Ready : TrayStatus.Armed;
-        }
+        if (!IsEnabled) return TrayStatus.Off;
+        if (PausedUntil is { } until && until > now) return TrayStatus.Paused;
+        if (NeedsAttention(ParsingStatus) || NeedsAttention(JevStatus)) return TrayStatus.Attention;
+        if (IsParsing) return TrayStatus.Parsing;
+        return Armed is null ? TrayStatus.Ready : TrayStatus.Armed;
     }
 
     public void AddActivity(ActivityEntry entry)
