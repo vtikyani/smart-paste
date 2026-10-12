@@ -9,6 +9,9 @@ internal static class StartupRegistration
     private const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "SmartPaste";
 
+    // Tells the app it was started at sign-in, so it stays in the tray instead of opening a window.
+    public const string BackgroundArgument = "--background";
+
     public static bool IsEnabled()
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKey);
@@ -37,5 +40,5 @@ internal static class StartupRegistration
         else Disable();
     }
 
-    private static string Command() => $"\"{AppInfo.ExecutablePath}\"";
+    private static string Command() => $"\"{AppInfo.ExecutablePath}\" {BackgroundArgument}";
 }
