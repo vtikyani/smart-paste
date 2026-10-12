@@ -8,9 +8,16 @@ using Wpf.Ui.Controls;
 
 namespace SmartPaste.App.UI.Settings.Pages;
 
-internal sealed record ThemeChoice(ThemePreference Value, string Label);
+// A screen reader names a list's items by ToString, so each choice reads as its label.
+internal sealed record ThemeChoice(ThemePreference Value, string Label)
+{
+    public override string ToString() => Label;
+}
 
-internal sealed record LifetimeChoice(int Minutes, string Label);
+internal sealed record LifetimeChoice(int Minutes, string Label)
+{
+    public override string ToString() => Label;
+}
 
 // The General page: on/off, pause, start-up, theme, and how pasting behaves.
 internal sealed partial class GeneralViewModel : ObservableObject, IDisposable

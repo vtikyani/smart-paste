@@ -8,7 +8,11 @@ using SmartPaste.App.Services;
 
 namespace SmartPaste.App.UI.Settings.Pages;
 
-internal sealed record RouteChoice(JevRoute Value, string Label);
+// A screen reader names a list's items by ToString, so each choice reads as its label.
+internal sealed record RouteChoice(JevRoute Value, string Label)
+{
+    public override string ToString() => Label;
+}
 
 // The Jev & AI page: keys, where Jev requests go, asking ahead, and the parsing model.
 internal sealed partial class JevViewModel : ObservableObject, IDisposable

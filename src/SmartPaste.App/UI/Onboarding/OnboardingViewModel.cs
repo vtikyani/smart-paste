@@ -26,6 +26,10 @@ internal sealed partial class StepDot : ObservableObject
 
     [ObservableProperty]
     public partial bool IsDone { get; set; }
+
+    // What a screen reader says for the dot: "Step 2 of 6, done".
+    public override string ToString() =>
+        $"Step {(int)Step + 1} of {OnboardingViewModel.StepCount}" + (IsCurrent ? ", current" : IsDone ? ", done" : "");
 }
 
 // The welcome tour: six short steps, Back / Next / Skip, and what happens when it ends. Finishing or closing it

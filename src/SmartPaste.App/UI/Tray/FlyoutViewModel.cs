@@ -220,4 +220,8 @@ internal sealed partial class FlyoutViewModel : ObservableObject, IDisposable
 }
 
 // One pause length in the flyout's pause menu.
-internal sealed record PauseChoice(string Label, IRelayCommand Command);
+internal sealed record PauseChoice(string Label, IRelayCommand Command)
+{
+    // What a screen reader falls back to for the menu item.
+    public override string ToString() => Label;
+}

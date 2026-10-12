@@ -75,6 +75,9 @@ internal sealed partial class PracticeFieldViewModel : ObservableObject
         State = PracticeFieldState.Empty;
         Caption = "";
     }
+
+    // What a screen reader says for the field in the practice form's list.
+    public override string ToString() => Label;
 }
 
 // The "Try it" step: a sample contact block to copy and a small form to paste into. Ctrl+V in the form runs the

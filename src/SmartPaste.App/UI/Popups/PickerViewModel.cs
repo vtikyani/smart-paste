@@ -142,4 +142,6 @@ internal sealed partial class PickerRow : ObservableObject
 
     [ObservableProperty]
     public partial bool IsSelected { get; set; }
+
+    public override string ToString() => SpokenText;
 }

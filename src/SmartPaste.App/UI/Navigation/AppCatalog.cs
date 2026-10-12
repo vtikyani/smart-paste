@@ -9,7 +9,11 @@ using System.Windows.Media.Imaging;
 namespace SmartPaste.App.UI.Navigation;
 
 // An app as the privacy page shows it. Icon is frozen, so it can cross threads.
-internal sealed record RunningApp(string ExeName, string DisplayName, ImageSource? Icon);
+internal sealed record RunningApp(string ExeName, string DisplayName, ImageSource? Icon)
+{
+    // What a screen reader says for the app in a list: "Slack, slack.exe", never the record's field dump.
+    public override string ToString() => $"{DisplayName}, {ExeName}";
+}
 
 // Which apps are running, with their names and icons, for the excluded-apps list.
 internal interface IAppCatalog

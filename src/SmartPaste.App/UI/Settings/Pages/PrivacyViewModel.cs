@@ -41,6 +41,9 @@ internal sealed partial class AppItem : ObservableObject
         DisplayName = app.DisplayName;
         Icon = app.Icon;
     }
+
+    // What a screen reader says for the app in a list.
+    public override string ToString() => Detail.Length == 0 ? Title : $"{Title}, {Detail}";
 }
 
 // The Privacy page: what leaves the PC, screenshots, apps Smart Paste leaves alone, and logs.

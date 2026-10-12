@@ -366,6 +366,12 @@
                 Focusable="False"
                 VerticalScrollBarVisibility="Auto">
                 <ItemsControl Focusable="False" ItemsSource="{Binding Armed.Groups}">
+                  <!-- Screen readers name list items from their container; without this they read the type name. -->
+                  <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                      <Setter Property="AutomationProperties.Name" Value="{Binding SpokenTitle}" />
+                    </Style>
+                  </ItemsControl.ItemContainerStyle>
                   <ItemsControl.ItemTemplate>
                     <DataTemplate>
                       <StackPanel>
@@ -376,9 +382,14 @@
                           Text="{Binding Title}"
                           Visibility="{Binding HasTitle, Converter={StaticResource SmartPaste.VisibleWhen}}" />
                         <ItemsControl Focusable="False" ItemsSource="{Binding Rows}">
+                          <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                              <Setter Property="AutomationProperties.Name" Value="{Binding SpokenText}" />
+                            </Style>
+                          </ItemsControl.ItemContainerStyle>
                           <ItemsControl.ItemTemplate>
                             <DataTemplate>
-                              <Grid Margin="14,3" AutomationProperties.Name="{Binding SpokenText}">
+                              <Grid Margin="14,3">
                                 <Grid.ColumnDefinitions>
                                   <ColumnDefinition Width="116" />
                                   <ColumnDefinition Width="*" />
@@ -388,8 +399,10 @@
                                   FontSize="13"
                                   Style="{StaticResource Caption}"
                                   Text="{Binding Name}" />
+                                <!-- The dots are read as "hidden". -->
                                 <TextBlock
                                   Grid.Column="1"
+                                  AutomationProperties.Name="{Binding SpokenValue}"
                                   Style="{StaticResource Body}"
                                   Text="{Binding DisplayValue}" />
                               </Grid>
@@ -552,6 +565,11 @@
             Focusable="False"
             ItemsSource="{Binding Recent}"
             Visibility="{Binding HasRecent, Converter={StaticResource SmartPaste.VisibleWhen}}">
+            <ItemsControl.ItemContainerStyle>
+              <Style TargetType="ContentPresenter">
+                <Setter Property="AutomationProperties.Name" Value="{Binding SpokenText}" />
+              </Style>
+            </ItemsControl.ItemContainerStyle>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
                 <Grid Margin="0,5">
