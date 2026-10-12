@@ -46,6 +46,27 @@ public sealed class WindowNavigatorTests
     });
 
     [Fact]
+    public void PagesCanBeVisitedAgain() => UiTestHost.Run(async () =>
+    {
+        using var ui = new TestUi();
+        var navigator = new WindowNavigator(ui.Services, UiTestHost.ShowOffScreen);
+        try
+        {
+            foreach (var page in new[] { SettingsPages.General, SettingsPages.About, SettingsPages.General, SettingsPages.Jev, SettingsPages.About })
+            {
+                navigator.ShowSettings(page);
+                await UiTestHost.Settle(250);
+                Assert.Equal(page, navigator.Settings!.CurrentPage);
+                Assert.True(UiTestHost.HasContent(UiTestHost.Render(navigator.Settings)));
+            }
+        }
+        finally
+        {
+            navigator.Settings?.Close();
+        }
+    });
+
+    [Fact]
     public void AMinimizedWindowIsRestored() => UiTestHost.Run(async () =>
     {
         using var ui = new TestUi();
