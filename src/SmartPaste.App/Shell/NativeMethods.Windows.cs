@@ -88,7 +88,8 @@ internal static partial class NativeMethods
 
     [DllImport("advapi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    public static extern bool GetTokenInformation(SafeAccessTokenHandle token, int informationClass, IntPtr buffer, int length, out int returned);
+    public static extern bool GetTokenInformation(
+        SafeAccessTokenHandle token, int informationClass, IntPtr buffer, int length, out int returned);
 
     [DllImport("advapi32.dll")]
     public static extern IntPtr GetSidSubAuthorityCount(IntPtr sid);

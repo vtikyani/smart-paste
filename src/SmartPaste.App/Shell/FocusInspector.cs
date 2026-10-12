@@ -94,6 +94,7 @@ internal sealed class FocusInspector : IDisposable
     // anything else, for our own windows, or when the budget runs out.
     public async Task<FocusedField?> InspectAsync(TimeSpan budget, CancellationToken ct)
     {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(budget, TimeSpan.Zero);
         var result = new TaskCompletionSource<FocusedField?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var deadline = Now + (long)budget.TotalMilliseconds;
         var queued = Enqueue(() =>
@@ -246,7 +247,8 @@ internal sealed class FocusInspector : IDisposable
 
         var parent = Parent(element);
         var anchor = element;
-        if (controlType == UiaControlTypes.Edit && parent is not null && Int(parent, UIA_PropertyIds.UIA_ControlTypePropertyId) == UiaControlTypes.ComboBox)
+        if (controlType == UiaControlTypes.Edit && parent is not null &&
+            Int(parent, UIA_PropertyIds.UIA_ControlTypePropertyId) == UiaControlTypes.ComboBox)
         {
             // A native editable combo box: its inner edit has the focus, but label and neighbors belong to the combo.
             anchor = parent.BuildUpdatedCache(_fieldCache);
@@ -274,9 +276,9 @@ internal sealed class FocusInspector : IDisposable
 
         var isCombo = !ReferenceEquals(anchor, element);
         var context = new FieldContext(
-            Name: Text(element, UIA_PropertyIds.UIA_NamePropertyId) ?? (isCombo ? Text(anchor, UIA_PropertyIds.UIA_NamePropertyId) : null),
+            Name: OwnOrCombo(UIA_PropertyIds.UIA_NamePropertyId),
             HelpText: helpText ?? description,
-            AutomationId: Text(element, UIA_PropertyIds.UIA_AutomationIdPropertyId) ?? (isCombo ? Text(anchor, UIA_PropertyIds.UIA_AutomationIdPropertyId) : null),
+            AutomationId: OwnOrCombo(UIA_PropertyIds.UIA_AutomationIdPropertyId),
             LabeledBy: LabeledBy(element) ?? (isCombo ? LabeledBy(anchor) : null),
             ControlType: FieldRules.ControlTypeName(controlType),
             IsPassword: Bool(element, UIA_PropertyIds.UIA_IsPasswordPropertyId),
@@ -290,6 +292,9 @@ internal sealed class FocusInspector : IDisposable
         var runtimeId = element.GetCachedPropertyValue(UIA_PropertyIds.UIA_RuntimeIdPropertyId) as int[] ?? [];
         var handle = new IntPtr(Int(element, UIA_PropertyIds.UIA_NativeWindowHandlePropertyId));
         return new FocusedField(context, anchorRect, runtimeId, processId, handle);
+
+        // The focused element's own value, else (inside a native combo box) the combo box's.
+        string? OwnOrCombo(int property) => Text(element, property) ?? (isCombo ? Text(anchor, property) : null);
     }
 
     // Containers above the field, nearest first, and the nearest heading before it at any of those levels.

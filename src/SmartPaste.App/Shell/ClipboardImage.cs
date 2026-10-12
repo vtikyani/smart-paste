@@ -247,11 +247,12 @@ internal static class ClipboardImage
     {
         var (width, height) = FitWithin(source.PixelWidth, source.PixelHeight, MaxSide);
         if (width == source.PixelWidth && height == source.PixelHeight) return source;
-        var scaled = new TransformedBitmap(source, new ScaleTransform((double)width / source.PixelWidth, (double)height / source.PixelHeight));
+        var scale = new ScaleTransform((double)width / source.PixelWidth, (double)height / source.PixelHeight);
+        var scaled = new TransformedBitmap(source, scale);
         // Rounding inside the scaler can leave a side one pixel over; trim it to the computed size.
-        if (scaled.PixelWidth > width || scaled.PixelHeight > height)
-            return new CroppedBitmap(scaled, new System.Windows.Int32Rect(0, 0, Math.Min(width, scaled.PixelWidth), Math.Min(height, scaled.PixelHeight)));
-        return scaled;
+        if (scaled.PixelWidth <= width && scaled.PixelHeight <= height) return scaled;
+        var trimmed = new System.Windows.Int32Rect(0, 0, Math.Min(width, scaled.PixelWidth), Math.Min(height, scaled.PixelHeight));
+        return new CroppedBitmap(scaled, trimmed);
     }
 
     private static byte[] EncodePng(BitmapSource source)

@@ -8,7 +8,8 @@ public sealed class OcrLayoutTests
     private static readonly ScreenRect Screen = new(0, 0, 3840, 2160);
     private static readonly ScreenRect Field = new(1000, 500, 300, 30);
 
-    private static TextLine Line(string text, int left, int top, int width = 120, int height = 20) => new(text, new ScreenRect(left, top, width, height));
+    private static TextLine Line(string text, int left, int top, int width = 120, int height = 20) =>
+        new(text, new ScreenRect(left, top, width, height));
 
     // ---- Where to look ----
 

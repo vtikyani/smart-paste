@@ -38,9 +38,7 @@ internal sealed class WindowsOcr
                 var image = ScreenCapture.Capture(region, LabelScale);
                 if (image is null) return null;
                 var lines = await RecognizeAsync(engine, image, ct).ConfigureAwait(false);
-                var onScreen = lines
-                    .Select(line => line with { Bounds = OcrGeometry.ToScreen(line.Bounds.Left, line.Bounds.Top, line.Bounds.Width, line.Bounds.Height, region, LabelScale) })
-                    .ToList();
+                var onScreen = lines.Select(line => line with { Bounds = ToScreen(line.Bounds, region) }).ToList();
                 return OcrLabelPicker.Pick(onScreen, field);
             }
             catch (Exception ex) when (IsOcrFailure(ex))
@@ -74,6 +72,10 @@ internal sealed class WindowsOcr
 
     private static bool IsOcrFailure(Exception ex) => ex is COMException or ArgumentException or InvalidOperationException
         or NotSupportedException or IOException or UnauthorizedAccessException;
+
+    // From the enlarged capture back to screen pixels.
+    private static ScreenRect ToScreen(ScreenRect imageBounds, ScreenRect region) =>
+        OcrGeometry.ToScreen(imageBounds.Left, imageBounds.Top, imageBounds.Width, imageBounds.Height, region, LabelScale);
 
     // Lines in the order the engine reads them, with bounds in image pixels.
     private async Task<List<TextLine>> RecognizeAsync(OcrEngine engine, CapturedImage image, CancellationToken ct)
