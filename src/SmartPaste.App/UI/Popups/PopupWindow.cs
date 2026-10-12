@@ -19,6 +19,7 @@ internal class PopupWindow : Window
 {
     private readonly bool _clickThrough;
     private int _fadeVersion;
+    private (ScreenRect Anchor, Func<int, int, Display, (int X, int Y)> Place)? _placement;
 
     // Parameterless for XAML; subclasses that let clicks through pass true.
     public PopupWindow() : this(clickThrough: false)
@@ -39,6 +40,11 @@ internal class PopupWindow : Window
         Focusable = false;
         UseLayoutRounding = true;
         SourceInitialized += OnSourceInitialized;
+        // Landing on a monitor with another display scale resizes the window; place it again for its new size.
+        DpiChanged += (_, _) =>
+        {
+            if (IsShowing && _placement is { } last) MoveTo(last.Anchor, last.Place);
+        };
     }
 
     protected IntPtr Handle => new WindowInteropHelper(this).EnsureHandle();
@@ -73,6 +79,17 @@ internal class PopupWindow : Window
     // surface's size in physical pixels and the anchor's monitor, and returns the surface's top-left.
     protected void ShowAt(ScreenRect anchor, Func<int, int, Display, (int X, int Y)> place)
     {
+        _placement = (anchor, place);
+        IsShowing = true;
+        MoveTo(anchor, place);
+        if (!IsVisible) Show();
+        // Showing can move a window that was never shown before; this also raises it above topmost windows that
+        // appeared since, still without activating it.
+        MoveTo(anchor, place);
+    }
+
+    private void MoveTo(ScreenRect anchor, Func<int, int, Display, (int X, int Y)> place)
+    {
         var display = Displays.FromRect(anchor);
         Surface.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var size = Surface.DesiredSize;
@@ -80,10 +97,6 @@ internal class PopupWindow : Window
         var width = display.ToPixels(size.Width - m.Left - m.Right);
         var height = display.ToPixels(size.Height - m.Top - m.Bottom);
         var (x, y) = place(width, height, display);
-        WindowInterop.MoveTopmost(Handle, x - display.ToPixels(m.Left), y - display.ToPixels(m.Top));
-        IsShowing = true;
-        if (!IsVisible) Show();
-        // Raise above other topmost windows that appeared since, still without activating.
         WindowInterop.MoveTopmost(Handle, x - display.ToPixels(m.Left), y - display.ToPixels(m.Top));
     }
 
