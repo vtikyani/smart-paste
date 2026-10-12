@@ -1,0 +1,56 @@
+<!--
+  Smart Paste design tokens that do not change with light/dark theme.
+  The brand idea is a highlighter: ink plus highlighter yellow, marking the one value that belongs in a field.
+  Interactive controls keep the Windows accent color (WPF-UI); brand yellow is for the logo and key moments.
+  Theme-dependent brushes live in Brand.Light.xaml / Brand.Dark.xaml under the same keys; use DynamicResource.
+-->
+<ResourceDictionary
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+  <!-- Palette -->
+  <Color x:Key="Brand.InkColor">#15171F</Color>
+  <Color x:Key="Brand.PaperColor">#FBFAF7</Color>
+  <Color x:Key="Brand.HighlighterColor">#FFD43B</Color>
+  <Color x:Key="Brand.HighlighterDeepColor">#F2B705</Color>
+
+  <SolidColorBrush x:Key="Brand.InkBrush" Color="{StaticResource Brand.InkColor}" />
+  <SolidColorBrush x:Key="Brand.PaperBrush" Color="{StaticResource Brand.PaperColor}" />
+  <SolidColorBrush x:Key="Brand.HighlighterBrush" Color="{StaticResource Brand.HighlighterColor}" />
+  <SolidColorBrush x:Key="Brand.HighlighterDeepBrush" Color="{StaticResource Brand.HighlighterDeepColor}" />
+
+  <!-- Shape -->
+  <CornerRadius x:Key="Brand.RadiusSmall">6</CornerRadius>
+  <CornerRadius x:Key="Brand.RadiusControl">8</CornerRadius>
+  <CornerRadius x:Key="Brand.RadiusCard">12</CornerRadius>
+  <CornerRadius x:Key="Brand.RadiusPopup">14</CornerRadius>
+  <CornerRadius x:Key="Brand.RadiusPill">999</CornerRadius>
+
+  <!-- Spacing (4-point grid) -->
+  <Thickness x:Key="Brand.PadXS">4</Thickness>
+  <Thickness x:Key="Brand.PadS">8</Thickness>
+  <Thickness x:Key="Brand.PadM">12</Thickness>
+  <Thickness x:Key="Brand.PadL">16</Thickness>
+  <Thickness x:Key="Brand.PadXL">24</Thickness>
+  <Thickness x:Key="Brand.PadXXL">32</Thickness>
+
+  <!-- Type scale (Segoe UI Variable on Windows 11, Segoe UI on Windows 10) -->
+  <FontFamily x:Key="Brand.FontText">Segoe UI Variable Text, Segoe UI</FontFamily>
+  <FontFamily x:Key="Brand.FontDisplay">Segoe UI Variable Display, Segoe UI</FontFamily>
+  <FontFamily x:Key="Brand.FontMono">Cascadia Mono, Consolas</FontFamily>
+  <sys:Double x:Key="Brand.SizeCaption">12</sys:Double>
+  <sys:Double x:Key="Brand.SizeBody">14</sys:Double>
+  <sys:Double x:Key="Brand.SizeBodyLarge">16</sys:Double>
+  <sys:Double x:Key="Brand.SizeSubtitle">20</sys:Double>
+  <sys:Double x:Key="Brand.SizeTitle">28</sys:Double>
+  <sys:Double x:Key="Brand.SizeHero">40</sys:Double>
+
+  <!-- Motion: short and decisive. Enter with a decelerating curve, leave faster than you came. -->
+  <Duration x:Key="Brand.DurationFast">0:0:0.12</Duration>
+  <Duration x:Key="Brand.DurationNormal">0:0:0.18</Duration>
+  <Duration x:Key="Brand.DurationSlow">0:0:0.28</Duration>
+  <sys:Double x:Key="Brand.EnterOffset">8</sys:Double>
+  <QuinticEase x:Key="Brand.EaseOut" EasingMode="EaseOut" />
+  <CubicEase x:Key="Brand.EaseIn" EasingMode="EaseIn" />
+</ResourceDictionary>

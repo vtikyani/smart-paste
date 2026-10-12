@@ -1,0 +1,23 @@
+<!-- Brand brushes for the light theme. Same keys as Brand.Dark.xaml; reference them with DynamicResource. -->
+<ResourceDictionary
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- A highlighter mark behind text: the "this is the value" moment. -->
+  <SolidColorBrush x:Key="Brand.HighlightFillBrush" Color="#FFE58A" />
+  <SolidColorBrush x:Key="Brand.HighlightTextBrush" Color="#15171F" />
+  <!-- Soft yellow wash for selected rows and cards that hold the armed block. -->
+  <SolidColorBrush x:Key="Brand.HighlightWashBrush" Color="#FFF6D6" />
+
+  <!-- Floating surfaces (picker, chips) that cannot use a system backdrop because they never take focus. -->
+  <SolidColorBrush x:Key="Brand.PopupSurfaceBrush" Color="#F9FAFB" />
+  <SolidColorBrush x:Key="Brand.PopupBorderBrush" Color="#1A000000" />
+  <SolidColorBrush x:Key="Brand.PopupTextBrush" Color="#15171F" />
+  <SolidColorBrush x:Key="Brand.PopupSubtleTextBrush" Color="#5C6270" />
+  <SolidColorBrush x:Key="Brand.KeyCapBrush" Color="#ECEEF2" />
+  <Color x:Key="Brand.ShadowColor">#40000000</Color>
+
+  <SolidColorBrush x:Key="Brand.SuccessBrush" Color="#1F9D57" />
+  <SolidColorBrush x:Key="Brand.WarningBrush" Color="#B86E00" />
+  <SolidColorBrush x:Key="Brand.DangerBrush" Color="#C93636" />
+</ResourceDictionary>
