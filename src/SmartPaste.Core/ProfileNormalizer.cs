@@ -73,8 +73,8 @@ public static partial class ProfileNormalizer
     public static string NormalizeKey(string key) => KeySeparators().Replace(key.Trim().ToLowerInvariant(), "_");
 
     // A person's name split into first, middle, and last. Titles ("Dr."), suffixes ("Jr.", "PhD"), and anything in
-    // brackets or quotes ("(they/them)") are left out, a surname keeps its particles ("Anna van der Berg"), and "Rivera,
-    // Jordan" is read last name first. Null when it is not clearly a first and a last name.
+    // brackets or quotes ("(they/them)") are left out, a surname keeps its particles ("Anna van der Berg"), and
+    // "Rivera, Jordan" is read last name first. Null when it is not clearly a first and a last name.
     internal static NameParts? SplitName(string fullName)
     {
         var text = WithoutAsides(fullName).Trim(',', ' ');
@@ -96,7 +96,7 @@ public static partial class ProfileNormalizer
 
         var words = NameWords(parts[0]);
         if (words is null || words.Count < 2 || words.Count(word => !IsParticle(word)) > 4) return null;
-        // The surname starts at the first particle that is not the last word ("van der Berg"), else it is the last word.
+        // The surname starts at the first particle that is not the last word ("van der Berg"), else at the last word.
         var surname = words.Count - 1;
         for (var i = 1; i < words.Count - 1; i++)
         {

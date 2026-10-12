@@ -27,7 +27,8 @@ public static partial class TextHeuristics
     // Each part has a length limit, so a long run of letters with no "@" is rejected quickly.
     private const string EmailPattern = @"(?<![\w.%+-])[A-Za-z0-9._%+-]{1,64}@(?:[A-Za-z0-9-]{1,63}\.){1,8}[A-Za-z]{2,24}(?![\w-])";
 
-    // Links end before spaces, brackets, quotes, and list punctuation: "<https://janedoe.dev>" is "https://janedoe.dev".
+    // Links end before spaces, angle brackets, quotes, and list punctuation: "<https://janedoe.dev>" is
+    // "https://janedoe.dev".
     private const string LinkPattern =
         @"(?<![\w@./-])(?:(?:https?://|www\.)|(?:[a-z]{2,3}\.)?linkedin\.com/)[^\s<>""'`|,;]+";
 
@@ -62,10 +63,10 @@ public static partial class TextHeuristics
     }
 
     // How many kinds of personal contact details the text holds, each counted once: an email address; a phone number
-    // written like one, or on a line labeled as one; a street address; a postal code next to its city or state, or under
-    // a street; and lines labeled as a name, email, phone, address, city, state, or ZIP code. A company label counts only
-    // next to another of these. Dates and links never count, and lines whose label is sensitive or about someone else
-    // (emergency contact, reference) are not read.
+    // written like one, or on a line labeled as one; a street address; a postal code next to its city or state, or
+    // under a street; and lines labeled as a name, email, phone, address, city, state, or ZIP code. A company label
+    // counts only next to another of these. Dates and links never count, and lines whose label is sensitive or about
+    // someone else (emergency contact, reference) are not read.
     internal static int CountContactSignals(string text)
     {
         ArgumentNullException.ThrowIfNull(text);

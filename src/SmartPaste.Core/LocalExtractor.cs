@@ -104,8 +104,8 @@ public static partial class LocalExtractor
                 entityOf[i] = current;
                 section = new Section(current, []);
                 sections.Add(section);
-                // "Ship to: Jordan Rivera" or "Shipping address: Jordan Rivera": the rest of the line is the block's first
-                // line. When it is the address a label already gave, reading it again adds nothing.
+                // "Ship to: Jordan Rivera" or "Shipping address: Jordan Rivera": the rest of the line is the block's
+                // first line. When it is the address a label already gave, reading it again adds nothing.
                 if (heading.Rest.Length > 0) section.Lines.Add(heading.Rest);
                 continue;
             }
@@ -152,8 +152,8 @@ public static partial class LocalExtractor
         }
     }
 
-    // Splits one address value into street, unit, city, state, and ZIP. A value with no street the patterns know is kept
-    // as the street only when it looks like one ("Rose Cottage, Main Road"), never "Same as billing".
+    // Splits one address value into street, unit, city, state, and ZIP. A value with no street the patterns know is
+    // kept as the street only when it looks like one ("Rose Cottage, Main Road"), never "Same as billing".
     private static void ReadAddressValue(string value, Dictionary<string, string> fields)
     {
         var address = AddressPatterns.Read([value]);
@@ -223,10 +223,10 @@ public static partial class LocalExtractor
         return null;
     }
 
-    // A conservative guess: two to four capitalized name words ("Jordan Rivera", "Siobhan J. O'Brien"), with an optional
-    // title ("Dr."), suffix ("Jr."), surname particles ("van der Berg"), and note in brackets ("(they/them)"), that are
-    // not a heading, a job title, a company, a label, or a street. Only the first comma segment is read, so "Martin
-    // Luther King, Jr." gives "Martin Luther King".
+    // A conservative guess: two to four capitalized name words ("Jordan Rivera", "Siobhan J. O'Brien"), with an
+    // optional title ("Dr."), suffix ("Jr."), surname particles ("van der Berg"), and note in brackets ("(they/them)"),
+    // that are not a heading, a job title, a company, a label, or a street. Only the first comma segment is read, so
+    // "Martin Luther King, Jr." gives "Martin Luther King".
     private static string? NameFrom(string line)
     {
         var candidate = ProfileNormalizer.WithoutAsides(line);
@@ -253,9 +253,9 @@ public static partial class LocalExtractor
 
     private sealed record HeadingLine(string Entity, string Rest);
 
-    // "Shipping Address", "Billing Information:", "Ship to: Jordan Rivera", "Home address": a line that starts the block
-    // for one address. Only "... to" and "... address" headings may carry the block's first line after a colon, so
-    // "Shipping: Free" is not one.
+    // "Shipping Address", "Billing Information:", "Ship to: Jordan Rivera", "Home address": a line that starts the
+    // block for one address. Only "... to" and "... address" headings may carry the block's first line after a colon,
+    // so "Shipping: Free" is not one.
     private static HeadingLine? Heading(string line)
     {
         var match = HeadingRegex().Match(line);

@@ -31,15 +31,16 @@ internal static partial class Redaction
     // Card and account labels name a secret ("Card #", "Acct no.") unless they name the holder or a contact detail
     // ("Name on card", "Account email").
     private static readonly string[] CardOrAccount = ["acct", "account", "card"];
-    private static readonly string[] HolderWords = ["name", "holder", "owner", "email", "e mail", "phone", "mobile", "cell", "type", "brand", "manager"];
+    private static readonly string[] HolderWords =
+        ["name", "holder", "owner", "email", "e mail", "phone", "mobile", "cell", "type", "brand", "manager"];
 
-    // Words a secret's label is made of. A line counts as a bare label ("Account number") only when every word is one of
-    // these, so a name such as "Taylor Swift" is never taken for the label "SWIFT".
+    // Words a secret's label is made of. A line counts as a bare label ("Account number") only when every word is one
+    // of these, so a name such as "Taylor Swift" is never taken for the label "SWIFT".
     private static readonly HashSet<string> LabelWords = BuildLabelWords();
 
     // The text with secrets removed: lines and " | " parts whose label names a secret, a lone label line ("Account
-    // number") together with the value on the line below it, and card numbers, SSNs, and IBANs anywhere. Everything else,
-    // line breaks included, is left exactly as it was.
+    // number") together with the value on the line below it, and card numbers, SSNs, and IBANs anywhere. Everything
+    // else, line breaks included, is left exactly as it was.
     public static string Redact(string text, string mask = Mask)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -211,8 +212,8 @@ internal static partial class Redaction
         return groups;
     }
 
-    // One run of digits, groups of four with a shorter last group ("4111 1111 1111 1111", "6221 2600 0000 0000 000"), or
-    // American Express and Diners Club layouts (4-6-5, 4-6-4). Phone numbers and dates are not grouped like this.
+    // One run of digits, groups of four with a shorter last group ("4111 1111 1111 1111", "6221 2600 0000 0000 001"),
+    // or American Express and Diners Club layouts (4-6-5, 4-6-4). Phone numbers and dates are not grouped like this.
     private static bool IsCardGrouping(List<(int Start, int Length)> groups, int first, int last)
     {
         if (first == last) return true;

@@ -8,9 +8,9 @@ internal static partial class AddressPatterns
     private const int TimeoutMs = 200;
     private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(TimeoutMs);
 
-    // A unit: a designator, longest first so "Floor" is never read as "Fl" plus "oor", that ends there ("Flushing",
-    // "Sterling", and "Aptos" are towns), then a unit number that holds a digit or is one or two characters ("Apt 4B",
-    // "Unit A", "Ste PH"); or "#12".
+    // A unit: a whole designator word ("Flushing", "Sterling", and "Aptos" are towns), tried longest first so "Floor"
+    // is never "Fl" plus "oor", then a unit number that holds a digit or is one or two characters ("Apt 4B", "Unit A",
+    // "Ste PH"); or "#12".
     private const string UnitPattern =
         @"(?:(?i:Apartment|Building|Suite|Floor|Room|Unit|Bldg|Apt|Ste|Fl|Rm)\b\.?[ \t]*#?[ \t]*|#[ \t]*)" +
         @"(?:[A-Za-z]{0,3}-?\d[A-Za-z0-9-]{0,7}|[A-Za-z0-9]{1,2})(?![\p{L}\p{N}-])";

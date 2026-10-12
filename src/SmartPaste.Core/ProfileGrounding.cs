@@ -17,7 +17,7 @@ public sealed partial class ProfileGrounding
     // Characters that end a link in running text.
     private static readonly char[] LinkSeparators = [' ', '\t', '\r', '\n', '<', '>', '"', '\'', '`', '|', ',', ';'];
 
-    // The source's words, plain (lower case, no accents, abbreviations closed up), padded with spaces for whole-word search.
+    // The source's words, plain (lower case, no accents, abbreviations closed up), padded for whole-word search.
     private readonly string _padded;
     private readonly string[] _tokens;
     private readonly HashSet<string> _words;
@@ -117,8 +117,8 @@ public sealed partial class ProfileGrounding
         return words.Length > 0 && words.All(_words.Contains);
     }
 
-    // At least seven digits that are whole, neighboring groups of one number in the text. "+1 201 555 0100" for a copied
-    // "201-555-0100": the country code may be added.
+    // At least seven digits that are whole, neighboring groups of one number in the text. "+1 201 555 0100" for a
+    // copied "201-555-0100": the country code may be added.
     private bool PhoneAppears(string value)
     {
         var digits = new string(value.Where(char.IsAsciiDigit).ToArray());

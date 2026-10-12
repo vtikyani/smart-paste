@@ -205,9 +205,9 @@ public sealed class OpenRouterParser
     // "error": null (or false) beside a reply is no error; an object or a message is one.
     private static bool IsError(JsonElement error) => error.ValueKind is JsonValueKind.Object or JsonValueKind.String;
 
-    // An error envelope maps by its code ({"error":{"code":402,"message":"..."}}, the code a number or a numeric string):
-    // a rejected key, no credits left, and rate limiting tell the user something they can act on; any other code, or
-    // none, is an unusable response. The message is never kept: it can quote the request.
+    // An error envelope maps by its code ({"error":{"code":402,"message":"..."}}, the code a number or a numeric
+    // string): a rejected key, no credits left, and rate limiting tell the user something they can act on; any other
+    // code, or none, is an unusable response. The message is never kept: it can quote the request.
     private static ServiceException ErrorEnvelope(JsonElement error)
     {
         int? status = null;

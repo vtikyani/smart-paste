@@ -124,8 +124,8 @@ internal static partial class LabelLines
     private static string? Lookup(string label) =>
         LabelCache.TryGetBuiltIn(label, out var key) ? key : KeywordRules.Match(label);
 
-    // A label is short, starts with a letter (or a digit and a letter, as in "2FA code"), and is followed by a colon or a
-    // tab and a value. The value ends at its last non-space character, found without backtracking over long runs.
+    // A label is short, starts with a letter (or a digit and a letter, as in "2FA code"), and is followed by a colon or
+    // a tab and a value. The value ends at its last non-space character, found without backtracking over long runs.
     [GeneratedRegex(@"^[ \t]*(?<label>(?:\p{L}|\d\p{L})[\p{L}\p{N} .'’/&()#*-]{0,39}?)[ \t]*(?::|：|\t)[ \t]*(?<value>\S(?:.*\S)?)[ \t]*$",
         RegexOptions.CultureInvariant, 200)]
     private static partial Regex LabeledRegex();
