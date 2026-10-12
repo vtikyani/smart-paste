@@ -1,0 +1,334 @@
+<Page
+  x:Class="SmartPaste.App.UI.Settings.Pages.PrivacyPage"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:nav="clr-namespace:SmartPaste.App.UI.Navigation"
+  xmlns:pages="clr-namespace:SmartPaste.App.UI.Settings.Pages"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  mc:Ignorable="d"
+  d:DataContext="{d:DesignInstance Type=pages:PrivacyViewModel}"
+  Title="Privacy">
+
+  <Page.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/SmartPaste;component/UI/Settings/SettingsStyles.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+
+      <!-- An app's own icon when it's running, a generic one otherwise. -->
+      <DataTemplate x:Key="AppIcon" DataType="{x:Type pages:AppItem}">
+        <Grid Width="24" Height="24">
+          <Image Source="{Binding Icon}" RenderOptions.BitmapScalingMode="HighQuality" Visibility="{Binding HasIcon, Converter={StaticResource Settings.BoolToVisibility}}" />
+          <ui:SymbolIcon
+            FontSize="20"
+            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+            Symbol="WindowApps24"
+            Visibility="{Binding HasIcon, Converter={StaticResource Settings.FalseToVisible}}" />
+        </Grid>
+      </DataTemplate>
+    </ResourceDictionary>
+  </Page.Resources>
+
+  <StackPanel Style="{StaticResource Settings.Page}">
+    <TextBlock Style="{StaticResource Settings.PageTitle}" Text="Privacy" />
+    <TextBlock Style="{StaticResource Settings.PageIntro}" Text="Smart Paste sends only what a paste needs, and only while you use it." />
+
+    <TextBlock Style="{StaticResource Settings.SectionHeader}" Text="What leaves your PC" />
+    <Border Padding="0" Style="{StaticResource Settings.Panel}">
+      <StackPanel>
+        <Grid Margin="20,18,20,18">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Border Style="{StaticResource Settings.IconTile}">
+            <ui:SymbolIcon HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" Symbol="Copy24" />
+          </Border>
+          <StackPanel Grid.Column="1" Margin="16,0,0,0">
+            <TextBlock FontWeight="SemiBold" Style="{StaticResource Settings.CardTitle}" Text="When you copy contact details" />
+            <TextBlock Style="{StaticResource Settings.Prose}" Text="If an OpenRouter key is saved, text you copy that looks like contact details goes to OpenRouter, where the parsing model reads it. Other copies are never sent." />
+          </StackPanel>
+        </Grid>
+        <Grid Margin="20,0,20,0">
+          <Border Height="1" Margin="56,0,0,0" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+        </Grid>
+        <Grid Margin="20,18,20,18">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Border Style="{StaticResource Settings.IconTile}">
+            <ui:SymbolIcon HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" Symbol="TextField24" />
+          </Border>
+          <StackPanel Grid.Column="1" Margin="16,0,0,0">
+            <TextBlock FontWeight="SemiBold" Style="{StaticResource Settings.CardTitle}" Text="When you paste into a form field" />
+            <TextBlock Style="{StaticResource Settings.Prose}" Text="The field's label and nearby text, plus your copied values (shortened), go to Jev through TypeSafe or OpenRouter. With Ask Jev ahead on, this happens when you click into the field." />
+          </StackPanel>
+        </Grid>
+        <Grid Margin="20,0,20,0">
+          <Border Height="1" Margin="56,0,0,0" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+        </Grid>
+        <Grid Margin="20,18,20,18">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <Border Style="{StaticResource Settings.IconTile}">
+            <ui:SymbolIcon HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" Symbol="ShieldLock24" />
+          </Border>
+          <StackPanel Grid.Column="1" Margin="16,0,0,0">
+            <TextBlock FontWeight="SemiBold" Style="{StaticResource Settings.CardTitle}" Text="Nothing else" />
+            <TextBlock Style="{StaticResource Settings.Prose}">
+              <Run Text="No tracking and no analytics. Your keys are kept by Windows Credential Manager. Your copied block stays in memory only and is forgotten after" />
+              <Run Text="{Binding BlockLifetime, Mode=OneWay}" /><Run Text="." />
+            </TextBlock>
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <TextBlock Style="{StaticResource Settings.SectionHeader}" Text="Screenshots" />
+    <ui:CardControl Icon="{ui:SymbolIcon ScanText24}" Style="{StaticResource Settings.Card}">
+      <ui:CardControl.Header>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Read text from screenshots" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="When you copy a screenshot, Windows' built-in text recognition reads it on this PC. The image never leaves your PC; only text that looks like contact details may then go to OpenRouter, as above." />
+        </StackPanel>
+      </ui:CardControl.Header>
+      <ui:ToggleSwitch
+        AutomationProperties.Name="Read text from screenshots"
+        IsChecked="{Binding ReadScreenshots}"
+        OffContent="Off"
+        OnContent="On" />
+    </ui:CardControl>
+
+    <TextBlock Style="{StaticResource Settings.SectionHeader}" Text="Apps" />
+
+    <!-- Built in, read-only. -->
+    <Border Style="{StaticResource Settings.Panel}">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="40" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <ui:SymbolIcon Margin="2,2,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" FontSize="24" Symbol="ShieldCheckmark24" />
+        <StackPanel Grid.Column="1">
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Apps Smart Paste never touches" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="Ctrl+V always pastes normally in these, and in admin windows and terminals too." />
+          <ItemsControl Margin="0,12,0,0" Focusable="False" ItemsSource="{Binding ProtectedApps}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type pages:AppItem}">
+                <Border
+                  Margin="0,0,6,6"
+                  Padding="6,4,10,4"
+                  Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                  CornerRadius="{DynamicResource Brand.RadiusSmall}"
+                  ToolTip="{Binding Title}">
+                  <StackPanel Orientation="Horizontal">
+                    <ContentPresenter Width="18" Height="18" Content="{Binding}" ContentTemplate="{StaticResource AppIcon}" />
+                    <TextBlock
+                      Margin="6,0,0,0"
+                      VerticalAlignment="Center"
+                      FontSize="{DynamicResource Brand.SizeCaption}"
+                      Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                      Text="{Binding ExeName}" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <!-- The user's own list. -->
+    <Border Padding="0" Style="{StaticResource Settings.Panel}">
+      <StackPanel>
+        <Grid Margin="16,14,16,14">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="40" />
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+          </Grid.ColumnDefinitions>
+          <ui:SymbolIcon Margin="2,2,0,0" HorizontalAlignment="Left" VerticalAlignment="Top" FontSize="24" Symbol="Prohibited24" />
+          <StackPanel Grid.Column="1" VerticalAlignment="Center">
+            <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Your excluded apps" />
+            <TextBlock Style="{StaticResource Settings.CardDescription}" Text="Ctrl+V always pastes normally in the apps you add here." />
+          </StackPanel>
+          <ui:Button
+            Grid.Column="2"
+            MinWidth="120"
+            Margin="12,0,0,0"
+            VerticalAlignment="Center"
+            AutomationProperties.Name="{Binding AddButtonText}"
+            Command="{Binding ToggleAddingCommand}">
+            <StackPanel Orientation="Horizontal">
+              <ui:SymbolIcon
+                Margin="0,0,6,0"
+                FontSize="16"
+                Symbol="Add24"
+                Visibility="{Binding IsAddingApp, Converter={StaticResource Settings.FalseToVisible}}" />
+              <TextBlock Text="{Binding AddButtonText}" />
+            </StackPanel>
+          </ui:Button>
+        </Grid>
+
+        <!-- Adding: pick a running app, or type a program name. -->
+        <Border
+          Padding="56,14,16,16"
+          Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+          BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+          BorderThickness="0,1,0,0"
+          Visibility="{Binding IsAddingApp, Converter={StaticResource Settings.BoolToVisibility}}">
+          <StackPanel>
+            <Grid>
+              <TextBlock FontWeight="SemiBold" Style="{StaticResource Settings.Caption}" Text="Running apps" />
+              <ui:Button
+                Padding="6,2,6,2"
+                HorizontalAlignment="Right"
+                Command="{Binding RefreshRunningAppsCommand}"
+                Content="Refresh"
+                FontSize="12"
+                Icon="{ui:SymbolIcon ArrowSync16}"
+                Style="{StaticResource Settings.QuietButton}" />
+            </Grid>
+            <ui:ProgressRing
+              Width="20"
+              Height="20"
+              Margin="0,12,0,8"
+              HorizontalAlignment="Left"
+              IsIndeterminate="True"
+              Visibility="{Binding IsLoadingRunningApps, Converter={StaticResource Settings.BoolToVisibility}}" />
+            <ScrollViewer MaxHeight="232" Margin="0,6,0,0" VerticalScrollBarVisibility="Auto">
+              <ItemsControl Focusable="False" ItemsSource="{Binding RunningApps}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate DataType="{x:Type nav:RunningApp}">
+                    <Grid Margin="0,2,0,2">
+                      <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                      </Grid.ColumnDefinitions>
+                      <Grid Width="20" Height="20" HorizontalAlignment="Left">
+                        <Image RenderOptions.BitmapScalingMode="HighQuality" Source="{Binding Icon}" />
+                        <ui:SymbolIcon FontSize="18" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Symbol="WindowApps24">
+                          <ui:SymbolIcon.Style>
+                            <Style TargetType="ui:SymbolIcon">
+                              <Setter Property="Visibility" Value="Collapsed" />
+                              <Style.Triggers>
+                                <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
+                                  <Setter Property="Visibility" Value="Visible" />
+                                </DataTrigger>
+                              </Style.Triggers>
+                            </Style>
+                          </ui:SymbolIcon.Style>
+                        </ui:SymbolIcon>
+                      </Grid>
+                      <TextBlock Grid.Column="1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                        <Run Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding DisplayName, Mode=OneWay}" />
+                        <Run FontSize="{DynamicResource Brand.SizeCaption}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding ExeName, Mode=OneWay}" />
+                      </TextBlock>
+                      <ui:Button
+                        Grid.Column="2"
+                        Margin="8,0,0,0"
+                        AutomationProperties.Name="{Binding DisplayName, StringFormat='Add {0}'}"
+                        Command="{Binding DataContext.AddRunningAppCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                        CommandParameter="{Binding}"
+                        Content="Add" />
+                    </Grid>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+            <TextBlock Margin="0,14,0,6" FontWeight="SemiBold" Style="{StaticResource Settings.Caption}" Text="Not running? Type its program name" />
+            <Grid MaxWidth="460" HorizontalAlignment="Left">
+              <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+              </Grid.ColumnDefinitions>
+              <ui:TextBox
+                MinWidth="260"
+                AutomationProperties.Name="Program name"
+                PlaceholderText="slack.exe"
+                Text="{Binding NewAppName, UpdateSourceTrigger=PropertyChanged}">
+                <ui:TextBox.InputBindings>
+                  <KeyBinding Key="Enter" Command="{Binding AddTypedAppCommand}" />
+                </ui:TextBox.InputBindings>
+              </ui:TextBox>
+              <ui:Button
+                Grid.Column="1"
+                Margin="8,0,0,0"
+                VerticalAlignment="Stretch"
+                Command="{Binding AddTypedAppCommand}"
+                Content="Add" />
+            </Grid>
+            <TextBlock
+              Margin="0,8,0,0"
+              AutomationProperties.LiveSetting="Assertive"
+              Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+              Style="{StaticResource Settings.Caption}"
+              Text="{Binding AddError}"
+              Visibility="{Binding AddError, Converter={StaticResource Settings.TextToVisible}}" />
+          </StackPanel>
+        </Border>
+
+        <ItemsControl Focusable="False" ItemsSource="{Binding ExcludedApps}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="{x:Type pages:AppItem}">
+              <Border Style="{StaticResource Settings.ListRow}">
+                <Grid>
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="40" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center" Content="{Binding}" ContentTemplate="{StaticResource AppIcon}" />
+                  <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Style="{StaticResource Settings.CardTitle}" Text="{Binding Title}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" />
+                    <TextBlock
+                      Style="{StaticResource Settings.CardDescription}"
+                      Text="{Binding Detail}"
+                      Visibility="{Binding Detail, Converter={StaticResource Settings.TextToVisible}}" />
+                  </StackPanel>
+                  <ui:Button
+                    Grid.Column="2"
+                    AutomationProperties.Name="{Binding ExeName, StringFormat='Remove {0}'}"
+                    Command="{Binding DataContext.RemoveAppCommand, RelativeSource={RelativeSource AncestorType=Page}}"
+                    CommandParameter="{Binding}"
+                    Content="Remove" />
+                </Grid>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <Border
+          Padding="56,14,16,16"
+          BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+          BorderThickness="0,1,0,0"
+          Visibility="{Binding HasExcludedApps, Converter={StaticResource Settings.FalseToVisible}}">
+          <TextBlock Style="{StaticResource Settings.Caption}" Text="No apps yet. Add one where Ctrl+V should always paste normally, like a code editor or a chat app." />
+        </Border>
+      </StackPanel>
+    </Border>
+
+    <TextBlock Style="{StaticResource Settings.SectionHeader}" Text="Logs" />
+    <ui:CardControl Icon="{ui:SymbolIcon DocumentText24}" Style="{StaticResource Settings.Card}">
+      <ui:CardControl.Header>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Log files" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="They help track down problems, and never contain what you copy or paste." />
+        </StackPanel>
+      </ui:CardControl.Header>
+      <ui:Button Command="{Binding OpenLogFolderCommand}" Content="Open log folder" Icon="{ui:SymbolIcon FolderOpen24}" />
+    </ui:CardControl>
+  </StackPanel>
+</Page>

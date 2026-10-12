@@ -1,0 +1,146 @@
+<Page
+  x:Class="SmartPaste.App.UI.Settings.Pages.ShortcutsPage"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:controls="clr-namespace:SmartPaste.App.UI.Controls"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:pages="clr-namespace:SmartPaste.App.UI.Settings.Pages"
+  xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  mc:Ignorable="d"
+  d:DataContext="{d:DesignInstance Type=pages:ShortcutsViewModel}"
+  Title="Shortcuts">
+
+  <Page.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="/SmartPaste;component/UI/Settings/SettingsStyles.xaml" />
+      </ResourceDictionary.MergedDictionaries>
+
+      <!-- Whether a shortcut works, under its description. -->
+      <DataTemplate x:Key="ShortcutStatus" DataType="{x:Type pages:ShortcutSettingViewModel}">
+        <StackPanel Margin="0,8,0,0" AutomationProperties.LiveSetting="Polite" Orientation="Horizontal">
+          <ui:SymbolIcon Margin="0,1,6,0" VerticalAlignment="Top" FontSize="14" Filled="True">
+            <ui:SymbolIcon.Style>
+              <Style TargetType="ui:SymbolIcon">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding Health}" Value="Working">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="Symbol" Value="CheckmarkCircle16" />
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding Health}" Value="Problem">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="Symbol" Value="Warning16" />
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </ui:SymbolIcon.Style>
+          </ui:SymbolIcon>
+          <TextBlock MaxWidth="420" Text="{Binding Message}">
+            <TextBlock.Style>
+              <Style TargetType="TextBlock" BasedOn="{StaticResource Settings.Caption}">
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding Health}" Value="Problem">
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </TextBlock.Style>
+          </TextBlock>
+        </StackPanel>
+      </DataTemplate>
+    </ResourceDictionary>
+  </Page.Resources>
+
+  <StackPanel Style="{StaticResource Settings.Page}">
+    <TextBlock Style="{StaticResource Settings.PageTitle}" Text="Shortcuts" />
+
+    <TextBlock Style="{StaticResource Settings.SectionHeader}" Text="Pasting" />
+    <Border Padding="0" Style="{StaticResource Settings.Panel}">
+      <StackPanel>
+        <Grid Margin="20,18,20,18">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="152" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <ItemsControl VerticalAlignment="Top" Style="{StaticResource KeyCap.Row}">
+            <ItemsControl.ItemsSource>
+              <x:Array Type="{x:Type sys:String}">
+                <sys:String>Ctrl</sys:String>
+                <sys:String>V</sys:String>
+              </x:Array>
+            </ItemsControl.ItemsSource>
+          </ItemsControl>
+          <StackPanel Grid.Column="1">
+            <TextBlock FontWeight="SemiBold" Style="{StaticResource Settings.CardTitle}" Text="Smart paste" />
+            <TextBlock Style="{StaticResource Settings.CardDescription}" Text="While a copied block is ready, pastes just the value the field wants. Otherwise it pastes normally." />
+          </StackPanel>
+        </Grid>
+        <Border Height="1" Margin="20,0,20,0" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+        <Grid Margin="20,18,20,18">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="152" />
+            <ColumnDefinition Width="*" />
+          </Grid.ColumnDefinitions>
+          <ItemsControl VerticalAlignment="Top" Style="{StaticResource KeyCap.Row}">
+            <ItemsControl.ItemsSource>
+              <x:Array Type="{x:Type sys:String}">
+                <sys:String>Ctrl</sys:String>
+                <sys:String>Shift</sys:String>
+                <sys:String>V</sys:String>
+              </x:Array>
+            </ItemsControl.ItemsSource>
+          </ItemsControl>
+          <StackPanel Grid.Column="1">
+            <TextBlock FontWeight="SemiBold" Style="{StaticResource Settings.CardTitle}" Text="Paste your original" />
+            <TextBlock Style="{StaticResource Settings.CardDescription}" Text="Always pastes exactly what you copied. Smart Paste never touches it." />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </Border>
+
+    <TextBlock Style="{StaticResource Settings.SectionHeader}" Text="Your shortcuts" />
+
+    <ui:CardControl DataContext="{Binding Picker}" Icon="{ui:SymbolIcon TextBulletListSquare24}" Style="{StaticResource Settings.Card}">
+      <ui:CardControl.Header>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Show all values" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="Opens a list of every value in your copied block, so you can pick one." />
+          <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource ShortcutStatus}" />
+        </StackPanel>
+      </ui:CardControl.Header>
+      <StackPanel>
+        <controls:HotkeyBox
+          AutomationProperties.Name="Show all values shortcut"
+          Hotkey="{Binding Hotkey}"
+          Problem="{Binding RecorderProblem, Mode=OneWayToSource}" />
+        <ui:HyperlinkButton
+          Margin="0,4,0,0"
+          HorizontalAlignment="Right"
+          Command="{Binding RestoreDefaultCommand}"
+          Content="Restore default"
+          Style="{StaticResource Settings.Link}"
+          Visibility="{Binding CanRestoreDefault, Converter={StaticResource Settings.BoolToVisibility}}" />
+      </StackPanel>
+    </ui:CardControl>
+
+    <ui:CardControl DataContext="{Binding Toggle}" Icon="{ui:SymbolIcon Power24}" Style="{StaticResource Settings.Card}">
+      <ui:CardControl.Header>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Turn Smart Paste on or off" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="Switches Smart Paste on or off from any app." />
+          <ContentPresenter Content="{Binding}" ContentTemplate="{StaticResource ShortcutStatus}" />
+        </StackPanel>
+      </ui:CardControl.Header>
+      <controls:HotkeyBox
+        AutomationProperties.Name="On or off shortcut"
+        Hotkey="{Binding Hotkey}"
+        Problem="{Binding RecorderProblem, Mode=OneWayToSource}" />
+    </ui:CardControl>
+  </StackPanel>
+</Page>

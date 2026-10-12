@@ -1,0 +1,154 @@
+<!--
+  Layout and text styles shared by the settings pages and the welcome tour. Colors come from WPF-UI's theme
+  brushes and the Brand.* tokens (UI/Theme), always through DynamicResource so light and dark both work.
+-->
+<ResourceDictionary
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:settings="clr-namespace:SmartPaste.App.UI.Settings"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+  <ResourceDictionary.MergedDictionaries>
+    <ResourceDictionary Source="/SmartPaste;component/UI/Controls/HotkeyBox.KeyCaps.xaml" />
+  </ResourceDictionary.MergedDictionaries>
+
+  <BooleanToVisibilityConverter x:Key="Settings.BoolToVisibility" />
+  <settings:FalseToVisibleConverter x:Key="Settings.FalseToVisible" />
+  <settings:TextToVisibleConverter x:Key="Settings.TextToVisible" />
+
+  <!-- Page column: generous side margins, a readable maximum width, left aligned like Windows Settings. -->
+  <Style x:Key="Settings.Page" TargetType="StackPanel">
+    <Setter Property="Margin" Value="40,28,40,40" />
+    <Setter Property="MaxWidth" Value="920" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+  </Style>
+
+  <Style x:Key="Settings.PageTitle" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource Brand.FontDisplay}" />
+    <Setter Property="FontSize" Value="{DynamicResource Brand.SizeTitle}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    <Setter Property="Margin" Value="0,0,0,6" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style x:Key="Settings.PageIntro" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource Brand.FontText}" />
+    <Setter Property="FontSize" Value="{DynamicResource Brand.SizeBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="MaxWidth" Value="640" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="LineHeight" Value="20" />
+  </Style>
+
+  <!-- Section header: more room above than below, so it clearly belongs to the cards that follow. -->
+  <Style x:Key="Settings.SectionHeader" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource Brand.FontText}" />
+    <Setter Property="FontSize" Value="{DynamicResource Brand.SizeBody}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    <Setter Property="Margin" Value="2,30,0,8" />
+  </Style>
+
+  <Style x:Key="Settings.CardTitle" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource Brand.FontText}" />
+    <Setter Property="FontSize" Value="{DynamicResource Brand.SizeBody}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+  </Style>
+
+  <Style x:Key="Settings.CardDescription" TargetType="TextBlock">
+    <Setter Property="FontFamily" Value="{DynamicResource Brand.FontText}" />
+    <Setter Property="FontSize" Value="{DynamicResource Brand.SizeCaption}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+    <Setter Property="TextWrapping" Value="Wrap" />
+    <Setter Property="Margin" Value="0,2,0,0" />
+    <Setter Property="LineHeight" Value="17" />
+  </Style>
+
+  <Style x:Key="Settings.Caption" TargetType="TextBlock" BasedOn="{StaticResource Settings.CardDescription}">
+    <Setter Property="Margin" Value="0" />
+  </Style>
+
+  <!-- Longer explanations in full-width panels: capped to a comfortable line length. -->
+  <Style x:Key="Settings.Prose" TargetType="TextBlock" BasedOn="{StaticResource Settings.CardDescription}">
+    <Setter Property="MaxWidth" Value="620" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <!-- One setting: icon, title and one line of explanation on the left, its control on the right. Setting rows
+       keep the Fluent control radius, like Windows Settings; feature cards use Brand.RadiusCard. -->
+  <Style x:Key="Settings.Card" TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
+    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="MinHeight" Value="68" />
+    <Setter Property="Padding" Value="16,12,16,12" />
+  </Style>
+
+  <Style x:Key="Settings.Expander" TargetType="ui:CardExpander" BasedOn="{StaticResource {x:Type ui:CardExpander}}">
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+
+  <!-- A card with free-form content, drawn like a CardControl so both sit together without seams. -->
+  <Style x:Key="Settings.Panel" TargetType="Border">
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}" />
+    <Setter Property="Padding" Value="16" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+  </Style>
+
+  <!-- A row inside a Settings.Panel list, separated by a hairline. -->
+  <Style x:Key="Settings.ListRow" TargetType="Border">
+    <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="16,10,12,10" />
+    <Setter Property="MinHeight" Value="52" />
+  </Style>
+
+  <!-- Soft square behind an icon: the visual anchor of a card or a promise. -->
+  <Style x:Key="Settings.IconTile" TargetType="Border">
+    <Setter Property="Width" Value="40" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Brand.RadiusControl}" />
+    <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </Style>
+
+  <!-- The highlighter: brand yellow behind ink, for the one moment a value is chosen. -->
+  <Style x:Key="Settings.HighlighterTile" TargetType="Border" BasedOn="{StaticResource Settings.IconTile}">
+    <Setter Property="Background" Value="{DynamicResource Brand.HighlightFillBrush}" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brand.HighlightTextBrush}" />
+  </Style>
+
+  <!-- Small status label: "Saved", "Not set", "Optional". -->
+  <Style x:Key="Settings.Pill" TargetType="Border">
+    <Setter Property="CornerRadius" Value="{DynamicResource Brand.RadiusPill}" />
+    <Setter Property="Padding" Value="9,2,10,3" />
+    <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+  </Style>
+
+  <Style x:Key="Settings.PillText" TargetType="TextBlock">
+    <Setter Property="FontSize" Value="{DynamicResource Brand.SizeCaption}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+  </Style>
+
+  <!-- A quiet button with no frame, for secondary actions like "Skip tour" and "Refresh". WPF-UI's Transparent
+       appearance keeps the border, so it's cleared here. -->
+  <Style x:Key="Settings.QuietButton" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+    <Setter Property="Appearance" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="MouseOverBorderBrush" Value="Transparent" />
+    <Setter Property="PressedBorderBrush" Value="Transparent" />
+  </Style>
+
+  <!-- Text button that looks like a link, for "Get a key" and the About links. -->
+  <Style x:Key="Settings.Link" TargetType="ui:HyperlinkButton" BasedOn="{StaticResource {x:Type ui:HyperlinkButton}}">
+    <Setter Property="Padding" Value="6,4,6,4" />
+    <Setter Property="Margin" Value="-6,0,0,0" />
+  </Style>
+</ResourceDictionary>
