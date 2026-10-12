@@ -1,3 +1,4 @@
+using System.Net;
 using SmartPaste.Core;
 
 public class FieldDeciderTests
@@ -304,6 +305,29 @@ public class FieldDeciderTests
         Assert.Null(decision.Confidence);
     }
 
+    [Theory]
+    [InlineData("{\"choices\":[\"x\"]}", ServiceFailure.BadResponse)]
+    [InlineData("[]", ServiceFailure.BadResponse)]
+    [InlineData("{\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}", ServiceFailure.PaymentRequired)]
+    public async Task MalformedOrRefusedJevAnswersStillFallBack(string body, ServiceFailure failure)
+    {
+        var jev = new JevClient(FakeHttp.Reply(HttpStatusCode.OK, body).Client(), new JevCredentials("ts", null));
+        var decision = await new FieldDecider(new LabelCache(null), jev).DecideAsync(Field("First Name"), Profile(Person), CancellationToken.None);
+        Assert.Equal("Jordan", decision.Value);
+        Assert.Equal(DecisionSource.BuiltIn, decision.DecidedBy);
+        Assert.Equal(failure, decision.JevFailure);
+    }
+
+    [Fact]
+    public async Task UnreadableCharsetStillFallsBack()
+    {
+        var http = FakeHttp.Reply(_ => FakeHttp.ResponseWithCharset("{}", "no-such-charset"));
+        var decision = await new FieldDecider(new LabelCache(null), new JevClient(http.Client(), new JevCredentials("ts", null)))
+            .DecideAsync(Field("First Name"), Profile(Person), CancellationToken.None);
+        Assert.Equal("Jordan", decision.Value);
+        Assert.Equal(ServiceFailure.BadResponse, decision.JevFailure);
+    }
+
     [Fact]
     public async Task NoKeyUsesLearnedThenRules()
     {
@@ -333,6 +357,9 @@ public class FieldDeciderTests
         var bySection = await decider.DecideAsync(Field("Street address") with { Sections = ["Shipping details"] }, Addresses, CancellationToken.None);
         Assert.Equal("2 Oak Ave", bySection.Value);
 
+        var byDelivery = await decider.DecideAsync(Field("Street address") with { Sections = ["Delivery"] }, Addresses, CancellationToken.None);
+        Assert.Equal("2 Oak Ave", byDelivery.Value);
+
         var ambiguous = await decider.DecideAsync(Field("Street address"), Addresses, CancellationToken.None);
         Assert.Equal(DecisionKind.Picker, ambiguous.Kind);
         Assert.Equal(DecisionReasons.MultipleValues, ambiguous.Reason);
@@ -347,6 +374,38 @@ public class FieldDeciderTests
         Assert.Equal(DecisionReasons.NoMatch, (await decider.DecideAsync(Field("Favourite colour"), Profile(Person), CancellationToken.None)).Reason);
         var someoneElse = Field("Phone") with { Sections = ["Emergency contact"] };
         Assert.Equal(DecisionReasons.NoMatch, (await decider.DecideAsync(someoneElse, Profile(Person), CancellationToken.None)).Reason);
+    }
+
+    [Theory]
+    [InlineData("Spouse first name")]
+    [InlineData("Emergency phone")]
+    [InlineData("Guardian email")]
+    [InlineData("Partner's email")]
+    [InlineData("Parent / guardian phone")]
+    [InlineData("Next of kin email")]
+    [InlineData("Referee email")]
+    [InlineData("Manager email")]
+    [InlineData("Child's first name")]
+    [InlineData("Dependent ZIP code")]
+    [InlineData("Beneficiary state")]
+    public async Task FallbackNeverFillsSomeoneElsesFieldWithTheUsersDetails(string label)
+    {
+        var cache = new LabelCache(null);
+        var decision = await new FieldDecider(cache, null).DecideAsync(Field(label), Profile(Person), CancellationToken.None);
+        Assert.Equal(DecisionKind.PlainPaste, decision.Kind);
+        Assert.Equal(DecisionReasons.NoMatch, decision.Reason);
+    }
+
+    [Fact]
+    public async Task PreferredIsNotAReferral()
+    {
+        var decider = new FieldDecider(new LabelCache(null), null);
+        var preferred = await decider.DecideAsync(Field("Preferred email:"), Profile(Person), CancellationToken.None);
+        Assert.Equal("v@example.com", preferred.Value);
+        var inSection = await decider.DecideAsync(Field("Email") with { Sections = ["Preferred contact"] }, Profile(Person), CancellationToken.None);
+        Assert.Equal("v@example.com", inSection.Value);
+        var referral = await decider.DecideAsync(Field("Email") with { Sections = ["Referral"] }, Profile(Person), CancellationToken.None);
+        Assert.Equal(DecisionReasons.NoMatch, referral.Reason);
     }
 
     [Fact]

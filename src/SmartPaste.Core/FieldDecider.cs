@@ -62,7 +62,16 @@ public sealed class FieldDecider
     // Deadline for Jev at paste time, shared by all routes. Ask-ahead callers pass a longer one.
     public static readonly TimeSpan PasteDeadline = TimeSpan.FromMilliseconds(1500);
 
-    private static readonly string[] EntityWords = ["billing", "shipping", "home", "work", "mailing", "company"];
+    // Words in a label or section that name the entity a value belongs to, and the word in that entity's label.
+    private static readonly (string Entity, string[] Words)[] EntityWords =
+    [
+        ("billing", ["billing"]),
+        ("shipping", ["shipping", "delivery"]),
+        ("home", ["home"]),
+        ("work", ["work"]),
+        ("mailing", ["mailing"]),
+        ("company", ["company", "employer", "organization", "organisation", "business"])
+    ];
 
     private readonly LabelCache _cache;
     private readonly IJevChooser? _jev;
@@ -175,8 +184,8 @@ public sealed class FieldDecider
     private Decision DecideLocally(FieldContext field, Profile profile)
     {
         var label = LabelNormalizer.Normalize(field.BestLabel());
-        // A field about someone else (emergency contact, reference) must not get the user's own details.
-        if (label.Length == 0 || field.Sections.Any(KeywordRules.IsAboutSomeoneElse)) return Plain(DecisionReasons.NoMatch);
+        // A field about someone else (spouse, emergency contact, reference) must not get the user's own details.
+        if (label.Length == 0 || IsAboutSomeoneElse(field)) return Plain(DecisionReasons.NoMatch);
         if (_cache.TryGet(label, out var key, out var learned))
             return Resolve(key, learned ? DecisionSource.Learned : DecisionSource.BuiltIn, field, profile);
         if (KeywordRules.Match(label) is { } ruleKey) return Resolve(ruleKey, DecisionSource.Rules, field, profile);
@@ -196,13 +205,19 @@ public sealed class FieldDecider
         foreach (var context in field.Sections.Prepend(field.BestLabel()))
         {
             var text = LabelNormalizer.Normalize(context);
-            var matches = candidates.Where(c =>
-                EntityWords.Any(w => Has(text, w) && Has(LabelNormalizer.Normalize(c.EntityLabel), w))).ToArray();
+            var matches = candidates.Where(c => EntityWords.Any(entity =>
+                entity.Words.Any(word => Has(text, word)) && Has(LabelNormalizer.Normalize(c.EntityLabel), entity.Entity))).ToArray();
             if (matches.Length == 1)
                 return new Decision(DecisionKind.Value, key, matches[0].Value, candidates, token, DecisionReasons.EntityMatched) { DecidedBy = source };
         }
         return new Decision(DecisionKind.Picker, key, null, candidates, token, DecisionReasons.MultipleValues) { DecidedBy = source };
     }
+
+    // Any text that names the field, or a section it sits in, says it belongs to another person.
+    private static bool IsAboutSomeoneElse(FieldContext field) =>
+        new[] { field.BestLabel(), field.LabeledBy, field.Name, field.Placeholder, field.MeaningfulAutomationId, field.OcrText }
+            .Concat(field.Siblings).Concat(field.Sections)
+            .Any(text => !string.IsNullOrWhiteSpace(text) && KeywordRules.IsAboutSomeoneElse(text!));
 
     private void Learn(FieldContext field, string key)
     {

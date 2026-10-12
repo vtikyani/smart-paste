@@ -240,6 +240,16 @@ public static partial class KeywordRules
         "enter", "the", "your", "a", "an", "here", "please", "type", "of", "on", "this"
     };
 
+    // Words that put a field's value with another person: their details are not in the user's block.
+    private static readonly string[] OtherPersonTerms =
+    [
+        "emergency", "next of kin", "kin", "spouse", "partner", "husband", "wife", "guardian", "parent", "mother",
+        "father", "sibling", "brother", "sister", "son", "daughter", "child", "children", "dependent", "dependant",
+        "relative", "relationship", "reference", "referee", "referral", "referrer", "referred", "referring", "manager",
+        "supervisor", "recruiter", "beneficiary", "beneficiaries", "co applicant", "coapplicant", "joint applicant",
+        "co borrower", "co signer", "cosigner", "landlord", "physician", "doctor", "witness", "sponsor", "friend"
+    ];
+
     // A label, heading, or id that marks a field which must never receive a profile value and never trigger a
     // network call with profile data. Labels and raw ids ("ccNumber") both work.
     public static bool IsSensitive(string normalizedLabel)
@@ -272,38 +282,56 @@ public static partial class KeywordRules
     }
 
     // Text (a label or a section heading) that says the field is about another person, whose details are not in the
-    // user's block.
+    // user's block. Word matches only: "Preferred email" is the user's own.
     public static bool IsAboutSomeoneElse(string text)
     {
         var s = LabelNormalizer.Normalize(text);
-        return Any(s, "emergency", "emergency contact", "reference", "references", "manager", "recruiter", "supervisor",
-            "next of kin", "spouse", "beneficiary", "guardian", "co applicant") || s.Contains("referr", StringComparison.Ordinal);
+        return s.Length > 0 && Mentions(s, OtherPersonTerms);
     }
 
+    // The profile key a label most likely asks for, or null. Labels that name a specific kind of value are checked
+    // before broader ones, so "Website address" is a website, "Company email" an email, and "Postal address" a street.
     public static string? Match(string normalizedLabel)
     {
         var s = LabelNormalizer.Normalize(normalizedLabel);
         if (s.Length == 0) return null;
-        if (Any(s, "emergency contact", "reference", "manager", "recruiter", "supervisor", "how did you hear", "cover letter", "promo code", "card number", "authorized to work", "authorization to work", "password", "social security", "ssn", "extension", "ext", "device type", "phone code", "country code", "dial code") || s.Contains("referr", StringComparison.Ordinal)) return null;
-        if (Any(s, "company name", "current company", "employer", "organization", "business name")) return FieldKeys.Company;
+        // Secrets and other people's details are never a profile value.
+        if (IsSensitive(s) || IsAboutSomeoneElse(s)) return null;
+        // Questions about the application, and parts of a phone number the block has no value for.
+        if (Any(s, "how did you hear", "cover letter", "promo code", "coupon", "discount code", "authorized to work",
+                "authorization to work", "job description", "extension", "ext", "device type", "phone code", "country code",
+                "dial code", "ip address", "username", "user name"))
+            return null;
+        // A birthplace is neither the user's city nor their birth date.
+        if (Any(s, "place of birth", "birthplace", "birth place", "city of birth", "country of birth", "town of birth",
+                "state of birth", "born in"))
+            return null;
+        // An employer's phone or address is the employer's, not the user's.
+        if (Has(s, "employer") && Any(s, "phone", "telephone", "fax", "email", "e mail", "address", "street", "city",
+                "state", "zip", "postal", "country", "website", "contact"))
+            return null;
+
+        if (Has(s, "linkedin")) return FieldKeys.Linkedin;
+        if (Any(s, "website", "web site", "web address", "homepage", "portfolio", "url")) return FieldKeys.Website;
+        if (Any(s, "email", "e mail")) return FieldKeys.Email;
+        if (Any(s, "phone", "mobile", "cell", "telephone", "tel")) return FieldKeys.Phone;
         if (Any(s, "full name", "full legal name")) return FieldKeys.FullName;
         if (Any(s, "first name", "given name", "forename") || (Has(s, "name") && Any(s, "first", "given"))) return FieldKeys.FirstName;
         if (Any(s, "last name", "family name", "surname")) return FieldKeys.LastName;
         if (Has(s, "middle")) return FieldKeys.MiddleName;
-        if (Any(s, "zip", "postal", "postcode", "post code")) return FieldKeys.Zip;
+        if (Any(s, "zip", "zipcode", "postal code", "postcode", "post code", "pincode")) return FieldKeys.Zip;
+        if (Any(s, "apt", "apartment", "suite", "unit", "line 2", "address 2")) return FieldKeys.Unit;
+        if (Any(s, "street", "address line 1", "address 1", "address")) return FieldKeys.Street;
+        // "Postal" alone is the postal code; "Postal address" was a street above.
+        if (Has(s, "postal")) return FieldKeys.Zip;
         if (Any(s, "city", "town")) return FieldKeys.City;
         if (Any(s, "state", "province")) return FieldKeys.State;
         if (Has(s, "country")) return FieldKeys.Country;
-        if (Any(s, "email", "e mail")) return FieldKeys.Email;
-        if (Any(s, "phone", "mobile", "cell", "telephone", "tel")) return FieldKeys.Phone;
-        if (Any(s, "apt", "apartment", "suite", "unit", "line 2", "address 2")) return FieldKeys.Unit;
-        if (Any(s, "street", "address line 1", "address 1", "address")) return FieldKeys.Street;
-        if (Has(s, "linkedin")) return FieldKeys.Linkedin;
-        if (Any(s, "website", "portfolio", "url")) return FieldKeys.Website;
-        if (Any(s, "birth", "dob")) return FieldKeys.DateOfBirth;
-        if (Any(s, "job description")) return null;
-        if (Any(s, "title", "position", "role")) return FieldKeys.Title;
-        if (s is "name" or "full name" or "your name" or "legal name" or "full legal name" or "applicant name" or "cardholder name") return FieldKeys.FullName;
+        if (Any(s, "birth", "dob", "birthday", "birthdate")) return FieldKeys.DateOfBirth;
+        if (Any(s, "company name", "current company", "employer", "organization", "organisation", "business name"))
+            return FieldKeys.Company;
+        if (Any(s, "title", "position", "role", "occupation")) return FieldKeys.Title;
+        if (s is "name" or "your name" or "legal name" or "applicant name" or "cardholder name" or "card holder name") return FieldKeys.FullName;
         return null;
     }
 
