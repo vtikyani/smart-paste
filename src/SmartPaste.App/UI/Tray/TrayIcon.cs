@@ -261,7 +261,7 @@ internal sealed class TrayIcon : IDisposable
         {
             icon.ShowNotification(
                 title: "Smart Paste couldn't save its settings",
-                message: "Your change works for now, but it may be lost when Smart Paste closes. Check that your disk isn't full.",
+                message: "Your change works for now, but Smart Paste may forget it when it closes. Make sure your disk isn't full.",
                 icon: NotificationIcon.Warning,
                 sound: false);
         }
