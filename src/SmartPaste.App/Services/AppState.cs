@@ -29,7 +29,9 @@ public enum ServiceStatus
     KeyRejected,
     OutOfCredits,
     RateLimited,
-    Unreachable
+    Unreachable,
+    // The service answered, but not with something Smart Paste could use (an unknown model id, a changed API).
+    ServiceError
 }
 
 public enum ProfileOrigin { CopiedText, Screenshot }

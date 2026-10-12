@@ -16,6 +16,8 @@ internal sealed class PasteFeedback : IPasteFeedback, IDisposable
     // A hint appears only once the user settles on a field, so tabbing through a form does not flicker.
     private static readonly TimeSpan HintDelay = TimeSpan.FromMilliseconds(350);
     private static readonly TimeSpan PastedHold = TimeSpan.FromMilliseconds(1000);
+    // A notice is read, not glanced at: it stays a little longer.
+    private static readonly TimeSpan NoticeHold = TimeSpan.FromMilliseconds(2200);
     private static readonly TimeSpan QuickFade = TimeSpan.FromMilliseconds(90);
     private static readonly TimeSpan SoftFade = TimeSpan.FromMilliseconds(220);
 
@@ -70,6 +72,17 @@ internal sealed class PasteFeedback : IPasteFeedback, IDisposable
         _working.Dismiss(TimeSpan.Zero);
         _pasted.ShowPasted(anchor, what);
         _pastedTimer.Stop();
+        _pastedTimer.Interval = PastedHold;
+        _pastedTimer.Start();
+    });
+
+    // Shares the "pasted" chip: the two never need to show at once.
+    public void ShowNotice(ScreenRect anchor, string message) => OnUiThread(() =>
+    {
+        _working.Dismiss(TimeSpan.Zero);
+        _pasted.ShowNotice(anchor, message);
+        _pastedTimer.Stop();
+        _pastedTimer.Interval = NoticeHold;
         _pastedTimer.Start();
     });
 

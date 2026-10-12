@@ -48,6 +48,11 @@ internal static class ServiceAlerts
             ServiceStatus.Unreachable => new ServiceAlert(InfoBarSeverity.Informational,
                 $"Can't reach {service}",
                 $"Check your internet connection. Until it's back, {meanwhile}."),
+            ServiceStatus.ServiceError => new ServiceAlert(InfoBarSeverity.Warning,
+                $"{service} sent an answer Smart Paste couldn't use",
+                affected == Affected.Jev
+                    ? $"Smart Paste tries again in a minute. Meanwhile, {meanwhile}."
+                    : $"Check the parsing model under Advanced. Meanwhile, {meanwhile}."),
             _ => null
         };
     }

@@ -29,6 +29,14 @@ internal partial class ChipWindow
         Announce("Pasted " + PastedText.Text);
     }
 
+    public void ShowNotice(ScreenRect anchor, string message)
+    {
+        NoticeText.Text = DisplayText.OneLine(message, 60);
+        Select(Notice);
+        PresentNear(anchor);
+        Announce(NoticeText.Text);
+    }
+
     // Updates the text in place when the hint is already showing for this field.
     public void ShowHint(ScreenRect field, FieldHint hint, bool animate)
     {
@@ -89,6 +97,7 @@ internal partial class ChipWindow
     {
         Working.Visibility = content == Working ? Visibility.Visible : Visibility.Collapsed;
         Pasted.Visibility = content == Pasted ? Visibility.Visible : Visibility.Collapsed;
+        Notice.Visibility = content == Notice ? Visibility.Visible : Visibility.Collapsed;
         Hint.Visibility = content == Hint ? Visibility.Visible : Visibility.Collapsed;
     }
 }

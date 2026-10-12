@@ -70,6 +70,24 @@
             Foreground="{DynamicResource Brand.PopupTextBrush}" />
         </StackPanel>
 
+        <!-- Notice: a short message when there is nothing to paste or choose from. -->
+        <StackPanel x:Name="Notice" Orientation="Horizontal">
+          <Grid Width="18" Height="18" VerticalAlignment="Center">
+            <Ellipse Stroke="{DynamicResource Brand.PopupSubtleTextBrush}" StrokeThickness="1.4" />
+            <Path
+              Data="M9,8 L9,12.6 M9,5.4 L9,5.6"
+              Stroke="{DynamicResource Brand.PopupTextBrush}"
+              StrokeEndLineCap="Round"
+              StrokeStartLineCap="Round"
+              StrokeThickness="1.7" />
+          </Grid>
+          <TextBlock
+            x:Name="NoticeText"
+            Margin="8,0,0,0"
+            VerticalAlignment="Center"
+            Foreground="{DynamicResource Brand.PopupTextBrush}" />
+        </StackPanel>
+
         <!-- Field hint: what Ctrl+V will paste here. -->
         <StackPanel x:Name="Hint" Orientation="Horizontal">
           <controls:KeyCap Height="18" FontSize="10.5" Text="Ctrl+V" />

@@ -82,6 +82,7 @@ internal static class StatusText
             ServiceStatus.Ready => new("Jev ready", Tone.Good),
             ServiceStatus.RateLimited => new("Jev is busy · using built-in labels", Tone.Caution),
             ServiceStatus.Unreachable => new("Offline · using built-in labels", Tone.Neutral),
+            ServiceStatus.ServiceError => new("Jev unavailable · using built-in labels", Tone.Caution),
             _ => new(AddKey, Tone.Neutral)
         };
 
@@ -94,6 +95,8 @@ internal static class StatusText
         if (parsing == ServiceStatus.KeyRejected) return new("OpenRouter key rejected", Tone.Critical, Local + "you add a working key.");
         if (jev == ServiceStatus.OutOfCredits) return new("Jev is out of credits", Tone.Caution, Labels + "credits are added.");
         if (parsing == ServiceStatus.OutOfCredits) return new("OpenRouter is out of credits", Tone.Caution, Local + "credits are added.");
+        if (parsing == ServiceStatus.ServiceError)
+            return new("OpenRouter couldn't read your copy", Tone.Caution, Local + "it works again. Check the model name in Settings.");
         return null;
     }
 

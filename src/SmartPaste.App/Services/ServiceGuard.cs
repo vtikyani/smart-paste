@@ -55,6 +55,7 @@ internal sealed class ServiceGuard
         ServiceFailure.Unauthorized => ServiceStatus.KeyRejected,
         ServiceFailure.PaymentRequired => ServiceStatus.OutOfCredits,
         ServiceFailure.RateLimited => ServiceStatus.RateLimited,
+        ServiceFailure.BadResponse => ServiceStatus.ServiceError,
         _ => ServiceStatus.Unreachable
     };
 

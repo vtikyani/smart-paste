@@ -54,6 +54,9 @@ public interface IPasteFeedback
     // Brief confirmation after a smart paste, for example "First name".
     void ShowPasted(ScreenRect anchor, string what);
 
+    // A short message near the caret, for example when the picker shortcut has nothing to offer.
+    void ShowNotice(ScreenRect anchor, string message);
+
     void ShowFieldHint(ScreenRect field, FieldHint hint);
     void HideFieldHint();
 
