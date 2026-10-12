@@ -112,7 +112,9 @@ type and where in Smart Paste's code it happened, never the message.
 - **Logs:** delete the `%LOCALAPPDATA%\SmartPaste\logs` folder at any time.
 - **Everything:** uninstall Smart Paste from Windows Settings > Apps > Installed apps. That removes your keys,
   settings, learned labels, logs, the start-at-sign-in entry, and the app. Only the installer's own log in
-  `%LOCALAPPDATA%\velopack` stays; you can delete it by hand.
+  `%LOCALAPPDATA%\velopack` stays; you can delete it by hand. If the installer set up .NET for you, the .NET runtime
+  stays installed (other apps can use it), and Microsoft's installer file for it (`inst-dotnet-*.exe`) stays in
+  your Downloads folder.
 
 ## Other services and their policies
 
