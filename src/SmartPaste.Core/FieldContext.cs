@@ -47,6 +47,8 @@ public sealed record FieldContext(
         var state = new JsonObject();
         var seen = new HashSet<string>(StringComparer.Ordinal);
         AddText("label", Usable(LabeledBy) ? LabeledBy : Name);
+        // The accessible name, when it says more than the label.
+        AddText("accessible_name", Name);
         AddText("placeholder", Placeholder);
         AddText("help_text", HelpText);
         AddText("field_id", MeaningfulAutomationId);

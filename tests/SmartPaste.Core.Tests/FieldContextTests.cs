@@ -94,6 +94,15 @@ public class FieldContextTests
         Assert.Equal(["Shipping address", "Checkout"], state["sections"]!.AsArray().Select(n => (string?)n));
         Assert.Equal("chrome", (string?)state["app"]);
         Assert.Null(state["ocr_text"]);
+        Assert.Null(state["accessible_name"]); // same words as the label
+    }
+
+    [Fact]
+    public void JevStateKeepsADifferentAccessibleName()
+    {
+        var state = new FieldContext("Address line 1 (street and number)", null, null, "Street", "Edit", false, []).ToJevState();
+        Assert.Equal("Street", (string?)state["label"]);
+        Assert.Equal("Address line 1 (street and number)", (string?)state["accessible_name"]);
     }
 
     [Fact]
