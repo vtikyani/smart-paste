@@ -1,0 +1,209 @@
+<Page
+  x:Class="SmartPaste.App.UI.Settings.Pages.JevPage"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:pages="clr-namespace:SmartPaste.App.UI.Settings.Pages"
+  xmlns:settings="clr-namespace:SmartPaste.App.UI.Settings"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  mc:Ignorable="d"
+  d:DataContext="{d:DesignInstance Type=pages:JevViewModel}"
+  Title="Jev &amp; AI">
+
+  <Page.Resources>
+    <ResourceDictionary Source="/SmartPaste;component/UI/Settings/SettingsStyles.xaml" />
+  </Page.Resources>
+
+  <StackPanel Style="{StaticResource Settings.Page}">
+    <TextBlock Style="{StaticResource Settings.PageTitle}" Text="Jev &amp; AI" />
+
+    <!-- Live problems with OpenRouter or TypeSafe. -->
+    <ItemsControl Margin="0,12,0,0" Focusable="False" ItemsSource="{Binding Alerts}">
+      <ItemsControl.ItemTemplate>
+        <DataTemplate DataType="{x:Type pages:ServiceAlert}">
+          <ui:InfoBar
+            Margin="0,0,0,8"
+            IsClosable="False"
+            IsOpen="True"
+            Message="{Binding Message}"
+            Severity="{Binding Severity}"
+            Title="{Binding Title}" />
+        </DataTemplate>
+      </ItemsControl.ItemTemplate>
+    </ItemsControl>
+
+    <!-- How Jev decides: the idea the whole app rests on. -->
+    <Border
+      Margin="0,10,0,0"
+      Padding="24,22,24,24"
+      CornerRadius="{DynamicResource Brand.RadiusCard}"
+      Style="{StaticResource Settings.Panel}">
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <Border Width="44" Height="44" Style="{StaticResource Settings.HighlighterTile}">
+          <ui:SymbolIcon
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            FontSize="22"
+            Filled="True"
+            Foreground="{DynamicResource Brand.HighlightTextBrush}"
+            Symbol="Sparkle24" />
+        </Border>
+        <StackPanel Grid.Column="1" MaxWidth="460" Margin="18,0,24,0" HorizontalAlignment="Left">
+          <TextBlock
+            FontFamily="{DynamicResource Brand.FontDisplay}"
+            FontSize="{DynamicResource Brand.SizeSubtitle}"
+            FontWeight="SemiBold"
+            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+            Text="Jev decides every paste"
+            TextWrapping="Wrap" />
+          <TextBlock
+            Margin="0,8,0,0"
+            FontSize="{DynamicResource Brand.SizeBody}"
+            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+            LineHeight="21"
+            Text="Jev, TypeSafe's decision model, reads the field, its label and what's around it, and picks which of your copied values goes there. If it isn't sure, you choose."
+            TextWrapping="Wrap" />
+        </StackPanel>
+
+        <!-- Your copied values, and the one Jev marks for an "Email address" field. -->
+        <StackPanel
+          Grid.Column="2"
+          Width="216"
+          VerticalAlignment="Center"
+          AutomationProperties.Name="Example: from your copied values, Jev picks the email for an Email address field.">
+          <TextBlock Margin="1,0,0,6" Style="{StaticResource Settings.Caption}" Text="Your copied values" />
+          <StackPanel Orientation="Horizontal">
+            <Border Style="{StaticResource Settings.Pill}">
+              <TextBlock Style="{StaticResource Settings.PillText}" Text="First name" />
+            </Border>
+            <Border Margin="6,0,0,0" Background="{DynamicResource Brand.HighlightFillBrush}" Style="{StaticResource Settings.Pill}">
+              <TextBlock Foreground="{DynamicResource Brand.HighlightTextBrush}" Style="{StaticResource Settings.PillText}" Text="Email" />
+            </Border>
+            <Border Margin="6,0,0,0" Style="{StaticResource Settings.Pill}">
+              <TextBlock Style="{StaticResource Settings.PillText}" Text="Phone" />
+            </Border>
+          </StackPanel>
+          <ui:SymbolIcon
+            Margin="0,6,0,4"
+            HorizontalAlignment="Center"
+            FontSize="16"
+            Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+            Symbol="ArrowDown24" />
+          <TextBlock Margin="1,0,0,5" Style="{StaticResource Settings.Caption}" Text="Email address" />
+          <Border
+            Height="34"
+            Background="{DynamicResource ControlFillColorDefaultBrush}"
+            BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="{DynamicResource ControlCornerRadius}">
+            <Grid>
+              <Border
+                Width="128"
+                Height="18"
+                Margin="7,0,0,0"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Background="{DynamicResource Brand.HighlightFillBrush}"
+                CornerRadius="3">
+                <Border
+                  Width="112"
+                  Height="6"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  Background="{DynamicResource Brand.HighlightTextBrush}"
+                  CornerRadius="3"
+                  Opacity="0.85" />
+              </Border>
+              <Border
+                Height="2"
+                Margin="1,0,1,-1"
+                VerticalAlignment="Bottom"
+                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                CornerRadius="0,0,4,4" />
+            </Grid>
+          </Border>
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <TextBlock Style="{StaticResource Settings.SectionHeader}" Text="Keys" />
+    <settings:ApiKeyEditor DataContext="{Binding OpenRouterKey}" />
+    <settings:ApiKeyEditor DataContext="{Binding TypeSafeKey}" />
+
+    <TextBlock Style="{StaticResource Settings.SectionHeader}" Text="How Jev is reached" />
+
+    <ui:CardControl Icon="{ui:SymbolIcon Globe24}" Style="{StaticResource Settings.Card}">
+      <ui:CardControl.Header>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Send Jev requests through" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}">
+            <Run Text="Automatic uses your TypeSafe key when one is saved, and OpenRouter otherwise." />
+            <Run Text="{Binding RouteSummary, Mode=OneWay}" />
+          </TextBlock>
+        </StackPanel>
+      </ui:CardControl.Header>
+      <ComboBox
+        MinWidth="200"
+        AutomationProperties.Name="Send Jev requests through"
+        DisplayMemberPath="Label"
+        ItemsSource="{Binding Routes}"
+        SelectedItem="{Binding SelectedRoute}" />
+    </ui:CardControl>
+
+    <ui:CardControl Icon="{ui:SymbolIcon Flash24}" Style="{StaticResource Settings.Card}">
+      <ui:CardControl.Header>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Ask Jev ahead for faster pastes" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="While a copied block is ready, Jev looks at each field as you click into it, so Ctrl+V is instant. Field details go to Jev on click, not only on paste." />
+        </StackPanel>
+      </ui:CardControl.Header>
+      <ui:ToggleSwitch
+        AutomationProperties.Name="Ask Jev ahead for faster pastes"
+        IsChecked="{Binding AskJevAhead}"
+        OffContent="Off"
+        OnContent="On" />
+    </ui:CardControl>
+
+    <ui:CardExpander Margin="0,26,0,4" Icon="{ui:SymbolIcon Beaker24}" Style="{StaticResource Settings.Expander}">
+      <ui:CardExpander.Header>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Advanced" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="The model that reads what you copy." />
+        </StackPanel>
+      </ui:CardExpander.Header>
+      <StackPanel Margin="40,4,0,4">
+        <TextBlock Style="{StaticResource Settings.CardTitle}" Text="Parsing model" />
+        <TextBlock Style="{StaticResource Settings.CardDescription}">
+          <Run Text="An OpenRouter model id. The default is" />
+          <Run FontWeight="SemiBold" Text="{Binding DefaultParsingModel, Mode=OneWay}" /><Run Text="." />
+        </TextBlock>
+        <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+          <ui:TextBox
+            Width="320"
+            AutomationProperties.Name="Parsing model"
+            ClearButtonEnabled="False"
+            FontFamily="{DynamicResource Brand.FontMono}"
+            KeyDown="OnModelKeyDown"
+            Text="{Binding ParsingModel, UpdateSourceTrigger=LostFocus}" />
+          <ui:Button
+            Margin="8,0,0,0"
+            Command="{Binding ResetParsingModelCommand}"
+            Content="Reset to default"
+            Icon="{ui:SymbolIcon ArrowReset24}" />
+        </StackPanel>
+        <TextBlock
+          Margin="0,8,0,0"
+          Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+          Style="{StaticResource Settings.Caption}"
+          Text="{Binding ParsingModelError}" />
+      </StackPanel>
+    </ui:CardExpander>
+  </StackPanel>
+</Page>

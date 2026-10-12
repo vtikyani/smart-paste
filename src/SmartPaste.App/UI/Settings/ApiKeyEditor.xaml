@@ -1,0 +1,161 @@
+<!--
+  One API key as a card: whether it's saved, a box to paste a new one, Save / Test / Remove, a link to get a key,
+  and the result of the last check. DataContext: ApiKeyViewModel.
+-->
+<UserControl
+  x:Class="SmartPaste.App.UI.Settings.ApiKeyEditor"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+  xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+  xmlns:settings="clr-namespace:SmartPaste.App.UI.Settings"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+  mc:Ignorable="d"
+  d:DataContext="{d:DesignInstance Type=settings:ApiKeyViewModel}">
+
+  <UserControl.Resources>
+    <ResourceDictionary Source="/SmartPaste;component/UI/Settings/SettingsStyles.xaml" />
+  </UserControl.Resources>
+
+  <Border Padding="0" Style="{StaticResource Settings.Panel}">
+    <Grid>
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="56" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="16" />
+      </Grid.RowDefinitions>
+
+      <ui:SymbolIcon
+        Margin="18,16,0,0"
+        HorizontalAlignment="Left"
+        VerticalAlignment="Top"
+        FontSize="24"
+        Symbol="Key24" />
+
+      <!-- Title, what the key is for, and whether one is saved. -->
+      <Grid Grid.Column="1" Margin="0,14,16,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <StackPanel>
+          <TextBlock Style="{StaticResource Settings.CardTitle}" Text="{Binding Title}" />
+          <TextBlock Style="{StaticResource Settings.CardDescription}" Text="{Binding Description}" />
+        </StackPanel>
+        <Border Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Top">
+          <Border.Style>
+            <Style TargetType="Border" BasedOn="{StaticResource Settings.Pill}">
+              <Style.Triggers>
+                <DataTrigger Binding="{Binding IsSaved}" Value="True">
+                  <Setter Property="Background" Value="{DynamicResource SystemFillColorSuccessBackgroundBrush}" />
+                </DataTrigger>
+              </Style.Triggers>
+            </Style>
+          </Border.Style>
+          <StackPanel Orientation="Horizontal">
+            <ui:SymbolIcon
+              Margin="0,0,5,0"
+              FontSize="12"
+              Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+              Symbol="Checkmark16"
+              Visibility="{Binding IsSaved, Converter={StaticResource Settings.BoolToVisibility}}" />
+            <TextBlock Style="{StaticResource Settings.PillText}" Text="{Binding StateText}" />
+          </StackPanel>
+        </Border>
+      </Grid>
+
+      <!-- Paste a key, then Save. Enter saves too. -->
+      <!-- The box grows with the window up to a comfortable width; Save stays right next to it. -->
+      <Grid Grid.Row="1" Grid.Column="1" Margin="0,14,16,0">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="*" MaxWidth="460" />
+          <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
+        <ui:PasswordBox
+          x:Name="KeyBox"
+          AutomationProperties.Name="{Binding Title}"
+          ClearButtonEnabled="False"
+          Icon="{ui:SymbolIcon Key24}"
+          IconPlacement="Left"
+          Password="{Binding KeyText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+          PlaceholderText="{Binding Placeholder}">
+          <ui:PasswordBox.InputBindings>
+            <KeyBinding Key="Enter" Command="{Binding SaveCommand}" />
+          </ui:PasswordBox.InputBindings>
+        </ui:PasswordBox>
+        <ui:Button
+          Grid.Column="1"
+          MinWidth="88"
+          Margin="8,0,0,0"
+          VerticalAlignment="Stretch"
+          Appearance="Primary"
+          Command="{Binding SaveCommand}"
+          Content="Save" />
+      </Grid>
+
+      <StackPanel Grid.Row="2" Grid.Column="1" Margin="0,10,16,0" Orientation="Horizontal">
+        <ui:Button Command="{Binding TestCommand}" Content="Test" Icon="{ui:SymbolIcon PlugConnected24}" />
+        <ui:Button
+          Margin="8,0,0,0"
+          Command="{Binding RemoveCommand}"
+          Content="Remove"
+          Icon="{ui:SymbolIcon Delete24}"
+          Visibility="{Binding IsSaved, Converter={StaticResource Settings.BoolToVisibility}}" />
+        <ui:HyperlinkButton
+          Margin="10,0,0,0"
+          Command="{Binding OpenGetKeyCommand}"
+          Content="{Binding GetKeyText}"
+          Icon="{ui:SymbolIcon Open16}"
+          Style="{StaticResource Settings.Link}" />
+      </StackPanel>
+
+      <!-- The last check, announced to screen readers as it changes. -->
+      <StackPanel
+        Grid.Row="3"
+        Grid.Column="1"
+        Margin="0,12,16,0"
+        AutomationProperties.LiveSetting="Polite"
+        Orientation="Horizontal"
+        Visibility="{Binding HasCheckMessage, Converter={StaticResource Settings.BoolToVisibility}}">
+        <Grid Width="16" Height="16" Margin="0,1,8,0" VerticalAlignment="Top">
+          <ui:ProgressRing
+            Width="16"
+            Height="16"
+            IsIndeterminate="True"
+            Visibility="{Binding IsChecking, Converter={StaticResource Settings.BoolToVisibility}}" />
+          <ui:SymbolIcon FontSize="16" Filled="True">
+            <ui:SymbolIcon.Style>
+              <Style TargetType="ui:SymbolIcon">
+                <Setter Property="Visibility" Value="Collapsed" />
+                <Style.Triggers>
+                  <DataTrigger Binding="{Binding CheckState}" Value="Passed">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="Symbol" Value="CheckmarkCircle16" />
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                  </DataTrigger>
+                  <DataTrigger Binding="{Binding CheckState}" Value="Failed">
+                    <Setter Property="Visibility" Value="Visible" />
+                    <Setter Property="Symbol" Value="ErrorCircle16" />
+                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                  </DataTrigger>
+                </Style.Triggers>
+              </Style>
+            </ui:SymbolIcon.Style>
+          </ui:SymbolIcon>
+        </Grid>
+        <TextBlock
+          MaxWidth="520"
+          Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+          Style="{StaticResource Settings.Caption}"
+          Text="{Binding CheckMessage}" />
+      </StackPanel>
+    </Grid>
+  </Border>
+</UserControl>

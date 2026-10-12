@@ -1,0 +1,32 @@
+<UserControl
+  x:Class="SmartPaste.App.UI.Onboarding.Steps.WelcomeStep"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:onboarding="clr-namespace:SmartPaste.App.UI.Onboarding">
+
+  <UserControl.Resources>
+    <ResourceDictionary Source="/SmartPaste;component/UI/Onboarding/OnboardingStyles.xaml" />
+  </UserControl.Resources>
+
+  <Grid VerticalAlignment="Center">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="*" />
+      <ColumnDefinition Width="Auto" />
+    </Grid.ColumnDefinitions>
+
+    <StackPanel Margin="0,0,40,0" VerticalAlignment="Center">
+      <Image
+        Width="56"
+        Height="56"
+        HorizontalAlignment="Left"
+        RenderOptions.BitmapScalingMode="HighQuality"
+        Source="{DynamicResource Brand.LogoImage}" />
+      <TextBlock Margin="0,26,0,0" Style="{StaticResource Onboarding.Hero}" Text="Paste the right thing into every field." />
+      <TextBlock Margin="0,16,0,0" Style="{StaticResource Onboarding.Lead}" Text="Copy a block of text once. Smart Paste fills each form field with just the part it asks for." />
+      <TextBlock Margin="0,28,0,0" Style="{StaticResource Settings.Caption}" Text="Six quick steps, with a form to practice on." />
+    </StackPanel>
+
+    <onboarding:PasteFlowIllustration Grid.Column="1" VerticalAlignment="Center" />
+  </Grid>
+</UserControl>

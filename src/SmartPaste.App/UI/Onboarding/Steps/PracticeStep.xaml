@@ -1,0 +1,112 @@
+<UserControl
+  x:Class="SmartPaste.App.UI.Onboarding.Steps.PracticeStep"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:onboarding="clr-namespace:SmartPaste.App.UI.Onboarding"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+  <UserControl.Resources>
+    <ResourceDictionary Source="/SmartPaste;component/UI/Onboarding/OnboardingStyles.xaml" />
+  </UserControl.Resources>
+
+  <StackPanel VerticalAlignment="Center" DataContext="{Binding Practice}">
+    <TextBlock Style="{StaticResource Onboarding.Title}" Text="Try it" />
+    <StackPanel Margin="0,10,0,0" AutomationProperties.LiveSetting="Polite" Orientation="Horizontal">
+      <ui:SymbolIcon
+        Margin="0,0,8,0"
+        VerticalAlignment="Center"
+        FontSize="18"
+        Filled="True"
+        Foreground="{DynamicResource SystemFillColorSuccessBrush}"
+        Symbol="CheckmarkCircle24"
+        Visibility="{Binding IsComplete, Converter={StaticResource Settings.BoolToVisibility}}" />
+      <TextBlock Margin="0" Style="{StaticResource Onboarding.Lead}" Text="{Binding Guidance}" />
+    </StackPanel>
+
+    <Grid Margin="0,22,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="232" />
+        <ColumnDefinition Width="20" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+
+      <!-- Something to copy. -->
+      <Border
+        Padding="18,16,18,18"
+        VerticalAlignment="Top"
+        CornerRadius="{DynamicResource Brand.RadiusCard}"
+        Style="{StaticResource Settings.Panel}">
+        <StackPanel>
+          <Grid>
+            <TextBlock VerticalAlignment="Center" Style="{StaticResource Onboarding.ItemTitle}" Text="Sample contact" />
+            <ui:Button
+              HorizontalAlignment="Right"
+              Appearance="Primary"
+              AutomationProperties.Name="Copy the sample contact"
+              Command="{Binding CopySampleCommand}">
+              <StackPanel Orientation="Horizontal">
+                <ui:SymbolIcon Margin="0,0,6,0" FontSize="14">
+                  <ui:SymbolIcon.Style>
+                    <Style TargetType="ui:SymbolIcon">
+                      <Setter Property="Symbol" Value="Copy24" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCopied}" Value="True">
+                          <Setter Property="Symbol" Value="Checkmark24" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </ui:SymbolIcon.Style>
+                </ui:SymbolIcon>
+                <TextBlock>
+                  <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                      <Setter Property="Text" Value="Copy" />
+                      <Style.Triggers>
+                        <DataTrigger Binding="{Binding IsCopied}" Value="True">
+                          <Setter Property="Text" Value="Copied" />
+                        </DataTrigger>
+                      </Style.Triggers>
+                    </Style>
+                  </TextBlock.Style>
+                </TextBlock>
+              </StackPanel>
+            </ui:Button>
+          </Grid>
+          <ItemsControl Margin="0,14,0,0" Focusable="False" ItemsSource="{Binding SampleLines}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <TextBlock
+                  Margin="0,0,0,4"
+                  FontSize="13"
+                  Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                  Text="{Binding}"
+                  TextTrimming="CharacterEllipsis" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock
+            Margin="0,8,0,0"
+            Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+            Style="{StaticResource Settings.Caption}"
+            Text="{Binding CopyProblem}"
+            Visibility="{Binding CopyProblem, Converter={StaticResource Settings.TextToVisible}}" />
+        </StackPanel>
+      </Border>
+
+      <!-- A small form that only Smart Paste can fill from that block. -->
+      <Border Grid.Column="2" Padding="20,16,20,10" CornerRadius="{DynamicResource Brand.RadiusCard}" Style="{StaticResource Settings.Panel}">
+        <StackPanel>
+          <TextBlock Margin="0,0,0,12" Style="{StaticResource Onboarding.ItemTitle}" Text="Practice form" />
+          <ItemsControl x:Name="Fields" Focusable="False" ItemsSource="{Binding Fields}" KeyboardNavigation.TabNavigation="Continue">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type onboarding:PracticeFieldViewModel}">
+                <onboarding:PracticeField Margin="0,0,0,4" />
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </StackPanel>
+</UserControl>
