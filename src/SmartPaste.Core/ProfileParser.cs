@@ -4,45 +4,17 @@ namespace SmartPaste.Core;
 
 public static class ProfileParser
 {
-    public static Profile Parse(string llmContent, DateTimeOffset now)
+    // Reads the parsing model's reply: {"entities":[{"label":"person","fields":...}]}. Fields may be an object
+    // ({"first_name":"Ada"}) or a list of pairs ([{"key":"first_name","value":"Ada"}], the structured-output shape).
+    // Prose or code fences around the JSON are ignored.
+    public static Profile Parse(string llmContent, DateTimeOffset now) => Build(ParseEntities(llmContent), now);
+
+    // Like Parse, but values that do not appear in the source text are dropped (see ProfileGrounding). Grounding runs
+    // before names are derived, so a full name built from a grounded first and last name stays.
+    public static Profile ParseGrounded(string llmContent, string sourceText, DateTimeOffset now)
     {
-        var json = ExtractObject(llmContent);
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-            if (root.ValueKind != JsonValueKind.Object ||
-                !root.TryGetProperty("entities", out var entitiesJson) || entitiesJson.ValueKind != JsonValueKind.Array)
-                throw new FormatException("Profile JSON must contain an entities array.");
-
-            var entities = new List<Entity>();
-            foreach (var item in entitiesJson.EnumerateArray())
-            {
-                if (item.ValueKind != JsonValueKind.Object ||
-                    !item.TryGetProperty("label", out var labelJson) || labelJson.ValueKind != JsonValueKind.String ||
-                    !item.TryGetProperty("fields", out var fieldsJson) || fieldsJson.ValueKind != JsonValueKind.Object)
-                    throw new FormatException("Each entity must contain a string label and fields object.");
-
-                var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-                foreach (var property in fieldsJson.EnumerateObject())
-                {
-                    if (property.Value.ValueKind == JsonValueKind.String)
-                        fields[property.Name] = property.Value.GetString()!;
-                    else if (property.Value.ValueKind == JsonValueKind.Number)
-                        fields[property.Name] = property.Value.GetRawText();
-                }
-
-                var entity = ProfileNormalizer.Normalize(new Entity(labelJson.GetString()!, fields));
-                if (entity.Fields.Count > 0)
-                    entities.Add(entity);
-            }
-
-            return new Profile(entities, now);
-        }
-        catch (JsonException ex)
-        {
-            throw new FormatException("Model reply is not valid profile JSON.", ex);
-        }
+        var grounding = new ProfileGrounding(sourceText);
+        return Build(ParseEntities(llmContent).Select(grounding.Ground), now);
     }
 
     public static Profile FromFastFields(FastFields f, DateTimeOffset now)
@@ -61,25 +33,94 @@ public static class ProfileParser
         }
     }
 
-    public static Profile Merge(Profile llm, FastFields f)
+    public static Profile Merge(Profile llm, FastFields f) => Merge(llm, FromFastFields(f, llm.CreatedAt));
+
+    // The model's result first; the local result fills only keys the model left out. Local values go to the entity
+    // with the same label, then to the model's first entity for the person's own details, else to a new entity.
+    public static Profile Merge(Profile llm, Profile local)
     {
-        var entities = llm.Entities.ToList();
-        if (entities.Count == 0)
-            entities.Add(new Entity("person", new Dictionary<string, string>()));
-
-        var firstFields = new Dictionary<string, string>(entities[0].Fields, StringComparer.Ordinal);
-        Fill(FieldKeys.Email, f.Email);
-        Fill(FieldKeys.Phone, f.Phone);
-        Fill(FieldKeys.Zip, f.Zip);
-        entities[0] = ProfileNormalizer.Normalize(new Entity(entities[0].Label, firstFields));
-        return new Profile(entities, llm.CreatedAt);
-
-        void Fill(string key, string? value)
+        ArgumentNullException.ThrowIfNull(llm);
+        ArgumentNullException.ThrowIfNull(local);
+        var entities = llm.Entities
+            .Select(e => (e.Label, Fields: new Dictionary<string, string>(e.Fields, StringComparer.Ordinal)))
+            .ToList();
+        var llmKeys = new HashSet<string>(llm.Keys, StringComparer.Ordinal);
+        foreach (var entity in local.Entities)
         {
-            if (!string.IsNullOrWhiteSpace(value) && llm.ValuesFor(key).Count == 0)
-                firstFields[key] = value;
+            var missing = entity.Fields.Where(f => !llmKeys.Contains(f.Key)).ToArray();
+            if (missing.Length == 0) continue;
+            var target = entities.FindIndex(e => e.Label.Equals(entity.Label, StringComparison.OrdinalIgnoreCase));
+            if (target < 0 && entity.Label.Equals("person", StringComparison.OrdinalIgnoreCase) && entities.Count > 0) target = 0;
+            if (target < 0)
+            {
+                entities.Add((entity.Label, new Dictionary<string, string>(StringComparer.Ordinal)));
+                target = entities.Count - 1;
+            }
+            foreach (var (key, value) in missing) entities[target].Fields.TryAdd(key, value);
+        }
+        return Build(entities.Select(e => new Entity(e.Label, e.Fields)), llm.CreatedAt);
+    }
+
+    // The entities as the model wrote them, keys normalized, before names are derived.
+    internal static IReadOnlyList<Entity> ParseEntities(string llmContent)
+    {
+        var json = ExtractObject(llmContent);
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object ||
+                !root.TryGetProperty("entities", out var entitiesJson) || entitiesJson.ValueKind != JsonValueKind.Array)
+                throw new FormatException("Profile JSON must contain an entities array.");
+
+            var entities = new List<Entity>();
+            foreach (var item in entitiesJson.EnumerateArray())
+            {
+                if (item.ValueKind != JsonValueKind.Object ||
+                    !item.TryGetProperty("label", out var labelJson) || labelJson.ValueKind != JsonValueKind.String ||
+                    !item.TryGetProperty("fields", out var fieldsJson) ||
+                    fieldsJson.ValueKind is not (JsonValueKind.Object or JsonValueKind.Array))
+                    throw new FormatException("Each entity must contain a string label and fields.");
+
+                var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+                if (fieldsJson.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var property in fieldsJson.EnumerateObject())
+                        Add(property.Name, property.Value);
+                }
+                else
+                {
+                    foreach (var pair in fieldsJson.EnumerateArray())
+                        if (pair.ValueKind == JsonValueKind.Object &&
+                            pair.TryGetProperty("key", out var key) && key.ValueKind == JsonValueKind.String &&
+                            pair.TryGetProperty("value", out var value))
+                            Add(key.GetString()!, value);
+                }
+                entities.Add(new Entity(labelJson.GetString()!, fields));
+
+                void Add(string name, JsonElement value)
+                {
+                    var key = ProfileNormalizer.NormalizeKey(name);
+                    var text = value.ValueKind switch
+                    {
+                        JsonValueKind.String => value.GetString(),
+                        JsonValueKind.Number => value.GetRawText(),
+                        _ => null
+                    };
+                    if (key.Length > 0 && !string.IsNullOrWhiteSpace(text)) fields.TryAdd(key, text.Trim());
+                }
+            }
+            return entities;
+        }
+        catch (JsonException)
+        {
+            // The JSON parser's message can quote the reply, which can hold copied text, so it is not kept.
+            throw new FormatException("Model reply is not valid profile JSON.");
         }
     }
+
+    private static Profile Build(IEnumerable<Entity> entities, DateTimeOffset now) =>
+        new(entities.Select(ProfileNormalizer.Normalize).Where(e => e.Fields.Count > 0).ToArray(), now);
 
     private static string ExtractObject(string content)
     {

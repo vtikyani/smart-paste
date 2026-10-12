@@ -9,6 +9,9 @@ public sealed record LearnedLabel(string Label, string Key);
 // Thread-safe: the paste path, the focus prefetcher, and the settings page all use one instance.
 public sealed class LabelCache
 {
+    // The built-in list, read once from the embedded resource and shared (read-only) by every instance.
+    private static readonly Lazy<IReadOnlyDictionary<string, string>> BuiltIn = new(LoadBuiltIn);
+
     private readonly object _gate = new();
     private readonly Dictionary<string, string> _seed = new(StringComparer.Ordinal);
     // Only learned labels are persisted, so a newer seed is never shadowed by an old copy of itself.
@@ -21,11 +24,7 @@ public sealed class LabelCache
     {
         _userFilePath = userFilePath;
         if (loadSeed)
-        {
-            using var stream = typeof(LabelCache).Assembly.GetManifestResourceStream("SmartPaste.Core.seed-labels.json")
-                ?? throw new InvalidOperationException("Embedded seed labels missing.");
-            Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(stream), _seed);
-        }
+            foreach (var (label, key) in BuiltIn.Value) _seed[label] = key;
         if (userFilePath is not null)
         {
             try { Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(userFilePath)), _learned); }
@@ -55,18 +54,29 @@ public sealed class LabelCache
         }
     }
 
-    public bool TryGet(string normalizedLabel, out string key)
+    public bool TryGet(string normalizedLabel, out string key) => TryGet(normalizedLabel, out key, out _);
+
+    // Like TryGet, and says where the answer came from: a label learned on this PC, or the built-in list.
+    public bool TryGet(string normalizedLabel, out string key, out bool learned)
     {
         var label = LabelNormalizer.Normalize(normalizedLabel);
         lock (_gate)
-            return _learned.TryGetValue(label, out key!) || _seed.TryGetValue(label, out key!);
+        {
+            learned = _learned.TryGetValue(label, out key!);
+            return learned || _seed.TryGetValue(label, out key!);
+        }
     }
 
+    // The built-in list alone, without anything learned. Thread-safe and allocation-free after first use.
+    internal static bool TryGetBuiltIn(string label, out string key) =>
+        BuiltIn.Value.TryGetValue(LabelNormalizer.Normalize(label), out key!);
+
     // Never throws: a cache write failing must not cost the user the paste it was learned from.
+    // Sensitive labels are never learned: such fields must never receive a value.
     public void Set(string normalizedLabel, string key)
     {
         var label = LabelNormalizer.Normalize(normalizedLabel);
-        if (label.Length == 0 || !FieldKeys.Standard.Contains(key)) return;
+        if (label.Length == 0 || !FieldKeys.Standard.Contains(key) || KeywordRules.IsSensitive(label)) return;
         lock (_gate)
         {
             if (_learned.TryGetValue(label, out var existing) && existing == key) return;
@@ -117,6 +127,15 @@ public sealed class LabelCache
         finally { try { if (temp is not null && File.Exists(temp)) File.Delete(temp); } catch (IOException) { } }
     }
 
+    private static IReadOnlyDictionary<string, string> LoadBuiltIn()
+    {
+        using var stream = typeof(LabelCache).Assembly.GetManifestResourceStream("SmartPaste.Core.seed-labels.json")
+            ?? throw new InvalidOperationException("Embedded seed labels missing.");
+        var seed = new Dictionary<string, string>(StringComparer.Ordinal);
+        Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(stream), seed);
+        return seed;
+    }
+
     private static void Overlay(Dictionary<string, string>? entries, Dictionary<string, string> target)
     {
         if (entries is null) return;
@@ -135,9 +154,20 @@ public static class KeywordRules
     public static bool IsSensitive(string normalizedLabel)
     {
         var s = LabelNormalizer.Normalize(normalizedLabel);
-        return Any(s, "password", "passcode", "ssn", "social security", "card number", "credit card", "debit card",
-            "cvc", "cvv", "security code", "expiration", "expiry", "routing number", "account number", "tax id", "otp",
-            "verification code", "one time code");
+        return Any(s, "password", "passcode", "ssn", "social security", "social insurance", "sin", "card number",
+            "credit card", "debit card", "cvc", "cvv", "cvv2", "csc", "security code", "expiration", "expiry",
+            "routing number", "account number", "iban", "tax id", "itin", "otp", "verification code",
+            "one time code", "auth code", "authentication code", "2fa", "mfa", "security question",
+            "security answer", "secret", "passport", "driver license", "drivers license", "driving licence");
+    }
+
+    // Text (a label or a section heading) that says the field is about another person, whose details are not in
+    // the user's block.
+    public static bool IsAboutSomeoneElse(string text)
+    {
+        var s = LabelNormalizer.Normalize(text);
+        return Any(s, "emergency", "emergency contact", "reference", "references", "manager", "recruiter", "supervisor",
+            "next of kin", "spouse", "beneficiary", "guardian", "co applicant") || s.Contains("referr", StringComparison.Ordinal);
     }
 
     public static string? Match(string normalizedLabel)

@@ -34,4 +34,44 @@ public class ProfileParserTests
         Assert.Equal("12345", merged.ValuesFor(FieldKeys.Zip).Single().Value);
         Assert.Equal("201-555-0100", merged.ValuesFor(FieldKeys.Phone).Single().Value);
     }
+
+    [Fact]
+    public void ParsesStructuredOutputPairs()
+    {
+        const string reply = "{\"entities\":[{\"label\":\"person\",\"fields\":[{\"key\":\"First Name\",\"value\":\" Ada \"},{\"key\":\"last_name\",\"value\":\"Lovelace\"},{\"key\":\"first_name\",\"value\":\"Duplicate\"},{\"key\":\"empty\",\"value\":\"\"}]}]}";
+        var p = ProfileParser.Parse(reply, Now);
+        Assert.Equal("Ada", p.ValuesFor(FieldKeys.FirstName).Single().Value);
+        Assert.Equal("Ada Lovelace", p.ValuesFor(FieldKeys.FullName).Single().Value);
+        Assert.Empty(p.ValuesFor("empty"));
+    }
+
+    [Fact]
+    public void GroundedParseDropsInventedValuesButKeepsDerivedNames()
+    {
+        const string reply = "{\"entities\":[{\"label\":\"person\",\"fields\":[{\"key\":\"first_name\",\"value\":\"Jordan\"},{\"key\":\"last_name\",\"value\":\"Rivera\"},{\"key\":\"phone\",\"value\":\"201-555-0199\"},{\"key\":\"company\",\"value\":\"Acme\"}]}]}";
+        var p = ProfileParser.ParseGrounded(reply, "Rivera, Jordan - 201-555-0100", Now);
+        Assert.Equal("Jordan Rivera", p.ValuesFor(FieldKeys.FullName).Single().Value);
+        Assert.Empty(p.ValuesFor(FieldKeys.Phone));
+        Assert.Empty(p.ValuesFor(FieldKeys.Company));
+    }
+
+    [Fact]
+    public void MergeFillsGapsFromTheLocalProfile()
+    {
+        var llm = ProfileParser.Parse("{\"entities\":[{\"label\":\"person\",\"fields\":{\"email\":\"a@b.com\",\"city\":\"Springfield\"}},{\"label\":\"shipping address\",\"fields\":{\"street\":\"2 Oak Ave\"}}]}", Now);
+        var local = new Profile(
+        [
+            new Entity("person", new Dictionary<string, string> { [FieldKeys.Email] = "other@b.com", [FieldKeys.Phone] = "201-555-0100", [FieldKeys.FullName] = "Jordan Rivera" }),
+            new Entity("billing address", new Dictionary<string, string> { [FieldKeys.Unit] = "Apt 4B", [FieldKeys.City] = "Newark" })
+        ], Now.AddSeconds(-1));
+
+        var merged = ProfileParser.Merge(llm, local);
+        Assert.Equal(Now, merged.CreatedAt);
+        Assert.Equal("a@b.com", merged.ValuesFor(FieldKeys.Email).Single().Value);
+        Assert.Equal("Springfield", merged.ValuesFor(FieldKeys.City).Single().Value);
+        var person = merged.Entities.Single(e => e.Label == "person");
+        Assert.Equal("201-555-0100", person.Fields[FieldKeys.Phone]);
+        Assert.Equal("Jordan", person.Fields[FieldKeys.FirstName]);
+        Assert.Equal("Apt 4B", merged.Entities.Single(e => e.Label == "billing address").Fields[FieldKeys.Unit]);
+    }
 }

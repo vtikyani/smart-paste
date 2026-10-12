@@ -21,6 +21,29 @@ public static class FieldKeys
         [DateOfBirth] = "Date of birth", [Website] = "Website", [Linkedin] = "LinkedIn"
     };
 
+    // What each standard key holds, in words precise enough for Jev to tell neighbours apart
+    // (first name vs full name, street vs unit).
+    private static readonly Dictionary<string, string> Descriptions = new(StringComparer.Ordinal)
+    {
+        [FirstName] = "First name (given name) only",
+        [MiddleName] = "Middle name or middle initial only",
+        [LastName] = "Last name (family name, surname) only",
+        [FullName] = "Full name: first and last name together",
+        [Street] = "Street address: house number and street (address line 1)",
+        [Unit] = "Apartment, suite, unit, or floor (address line 2)",
+        [City] = "City or town",
+        [State] = "State, province, or region",
+        [Zip] = "ZIP or postal code",
+        [Country] = "Country",
+        [Email] = "Email address",
+        [Phone] = "Phone number",
+        [Company] = "Company, employer, or organization name",
+        [Title] = "Job title or position",
+        [DateOfBirth] = "Date of birth",
+        [Website] = "Personal website or portfolio URL",
+        [Linkedin] = "LinkedIn profile URL"
+    };
+
     // A name people can read: "First name" for standard keys, "Favorite color" for an extra key like favorite_color.
     public static string DisplayName(string key)
     {
@@ -28,6 +51,10 @@ public static class FieldKeys
         var words = key.Replace('_', ' ').Replace('-', ' ').Trim();
         return words.Length == 0 ? key : char.ToUpperInvariant(words[0]) + words[1..];
     }
+
+    // A short plain-English description of what the key holds. Extra keys get their display name.
+    public static string Describe(string key) =>
+        Descriptions.TryGetValue(key, out var description) ? description : DisplayName(key);
 }
 
 public sealed record Entity(string Label, IReadOnlyDictionary<string, string> Fields);

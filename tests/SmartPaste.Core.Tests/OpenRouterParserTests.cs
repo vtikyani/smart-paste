@@ -4,33 +4,142 @@ using SmartPaste.Core;
 
 public class OpenRouterParserTests
 {
-    [Fact] public async Task TextRequestUsesExpectedShapeAndParsesReply()
+    private const string Text = "Ada Lovelace, ada@example.com, 201-555-0100";
+
+    private static string Reply(string content, string finish = "stop") =>
+        JsonSerializer.Serialize(new { choices = new[] { new { message = new { role = "assistant", content }, finish_reason = finish } } });
+
+    private const string Entities = "{\"entities\":[{\"label\":\"person\",\"fields\":[{\"key\":\"first_name\",\"value\":\"Ada\"},{\"key\":\"last_name\",\"value\":\"Lovelace\"},{\"key\":\"email\",\"value\":\"ada@example.com\"},{\"key\":\"phone\",\"value\":\"555-867-5309\"}]}]}";
+
+    [Fact]
+    public async Task RequestShapeForClaudeHaiku()
     {
-        string? body = null;
-        using var http = new HttpClient(new Handler(async request => {
-            body = await request.Content!.ReadAsStringAsync();
-            Assert.Equal("https://openrouter.ai/api/v1/chat/completions", request.RequestUri!.ToString());
-            Assert.Equal("Bearer test-key", request.Headers.Authorization!.ToString());
-            return Reply();
-        }));
-        var profile = await new OpenRouterParser(http, "test-key").ParseTextAsync("Ada Lovelace", DateTimeOffset.UtcNow, CancellationToken.None);
-        Assert.Equal("Ada", profile.ValuesFor(FieldKeys.FirstName).Single().Value);
-        using var doc = JsonDocument.Parse(body!);
-        Assert.Equal(OpenRouterParser.Model, doc.RootElement.GetProperty("model").GetString());
-        Assert.Equal("json_object", doc.RootElement.GetProperty("response_format").GetProperty("type").GetString());
-        Assert.Equal("Ada Lovelace", doc.RootElement.GetProperty("messages")[1].GetProperty("content").GetString());
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply(Entities));
+        await new OpenRouterParser(http.Client(), "test-key").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None);
+
+        var request = Assert.Single(http.Requests);
+        Assert.Equal("https://openrouter.ai/api/v1/chat/completions", request.Url);
+        Assert.Equal("Bearer test-key", request.Authorization);
+        Assert.Equal("https://github.com/vtikyani/smart-paste", request.Headers["HTTP-Referer"]);
+        Assert.Equal("Smart Paste", request.Headers["X-OpenRouter-Title"]);
+
+        using var body = JsonDocument.Parse(request.Body!);
+        var root = body.RootElement;
+        Assert.Equal("anthropic/claude-haiku-5.5", root.GetProperty("model").GetString());
+        Assert.False(root.TryGetProperty("temperature", out _));
+        Assert.False(root.GetProperty("reasoning").GetProperty("enabled").GetBoolean());
+        var format = root.GetProperty("response_format");
+        Assert.Equal("json_schema", format.GetProperty("type").GetString());
+        Assert.True(format.GetProperty("json_schema").GetProperty("strict").GetBoolean());
+        var schema = format.GetProperty("json_schema").GetProperty("schema");
+        Assert.False(schema.GetProperty("additionalProperties").GetBoolean());
+        Assert.True(root.GetProperty("provider").GetProperty("require_parameters").GetBoolean());
+        Assert.Equal("latency", root.GetProperty("provider").GetProperty("sort").GetString());
+        var messages = root.GetProperty("messages");
+        Assert.Equal(OpenRouterParser.SystemPrompt, messages[0].GetProperty("content").GetString());
+        Assert.Equal(Text, messages[1].GetProperty("content").GetString());
     }
-    [Fact] public async Task ImageRequestHasPngDataUrl()
+
+    [Fact]
+    public async Task ModelIsConfigurable()
     {
-        string? body = null;
-        using var http = new HttpClient(new Handler(async request => { body = await request.Content!.ReadAsStringAsync(); return Reply(); }));
-        await new OpenRouterParser(http, "test-key").ParseImageAsync([1, 2, 3], DateTimeOffset.UtcNow, CancellationToken.None);
-        using var doc = JsonDocument.Parse(body!);
-        Assert.Equal("data:image/png;base64,AQID", doc.RootElement.GetProperty("messages")[1].GetProperty("content")[1].GetProperty("image_url").GetProperty("url").GetString());
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply(Entities));
+        var parser = new OpenRouterParser(http.Client(), "k", "openai/gpt-6-mini");
+        await parser.ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.Equal("openai/gpt-6-mini", parser.Model);
+        Assert.Contains("\"model\":\"openai/gpt-6-mini\"", http.Requests[0].Body);
     }
-    private static HttpResponseMessage Reply() => new(HttpStatusCode.OK) { Content = new StringContent("{\"choices\":[{\"message\":{\"content\":\"{\\\"entities\\\":[{\\\"label\\\":\\\"person\\\",\\\"fields\\\":{\\\"first_name\\\":\\\"Ada\\\"}}]}\"}}]}") };
-    private sealed class Handler(Func<HttpRequestMessage, Task<HttpResponseMessage>> send) : HttpMessageHandler
+
+    [Fact]
+    public async Task ReplyIsGroundedInTheCopiedText()
     {
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => send(request);
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply(Entities));
+        var profile = await new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.Equal("Ada Lovelace", profile.ValuesFor(FieldKeys.FullName).Single().Value);
+        Assert.Equal("ada@example.com", profile.ValuesFor(FieldKeys.Email).Single().Value);
+        // The model's phone number is not in the text, so it is dropped.
+        Assert.Empty(profile.ValuesFor(FieldKeys.Phone));
+    }
+
+    [Fact]
+    public async Task ObjectShapedFieldsInProseStillParse()
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply("Sure! {\"entities\":[{\"label\":\"person\",\"fields\":{\"email\":\"ada@example.com\"}}]}"));
+        var profile = await new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None);
+        Assert.Equal("ada@example.com", profile.ValuesFor(FieldKeys.Email).Single().Value);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, ServiceFailure.Unauthorized)]
+    [InlineData(HttpStatusCode.PaymentRequired, ServiceFailure.PaymentRequired)]
+    [InlineData(HttpStatusCode.TooManyRequests, ServiceFailure.RateLimited)]
+    [InlineData(HttpStatusCode.BadGateway, ServiceFailure.ServerError)]
+    [InlineData(HttpStatusCode.BadRequest, ServiceFailure.BadResponse)]
+    public async Task HttpErrorsAreTyped(HttpStatusCode status, ServiceFailure expected)
+    {
+        var http = FakeHttp.Reply(status, "{\"error\":{\"code\":1,\"message\":\"Ada Lovelace\"}}");
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(expected, error.Failure);
+        Assert.Equal((int)status, error.StatusCode);
+        Assert.DoesNotContain("Ada", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{\"choices\":[]}")]
+    [InlineData("{\"error\":{\"code\":\"oops\",\"message\":\"x\"}}")]
+    public async Task UnusableRepliesAreBadResponses(string body)
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, body);
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(ServiceFailure.BadResponse, error.Failure);
+    }
+
+    [Fact]
+    public async Task ErrorObjectWithStatusIsTyped()
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, "{\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}");
+        var error = await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(http.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(ServiceFailure.PaymentRequired, error.Failure);
+    }
+
+    [Fact]
+    public async Task TruncatedOrNonJsonContentIsBadResponse()
+    {
+        var cut = FakeHttp.Reply(HttpStatusCode.OK, Reply("{\"entities\":[{\"label\":\"pers", "length"));
+        Assert.Equal(ServiceFailure.BadResponse, (await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(cut.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None))).Failure);
+        var prose = FakeHttp.Reply(HttpStatusCode.OK, Reply("I cannot help with that."));
+        Assert.Equal(ServiceFailure.BadResponse, (await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(prose.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None))).Failure);
+    }
+
+    [Fact]
+    public async Task NetworkAndTimeoutAreTyped()
+    {
+        var offline = FakeHttp.Reply(_ => throw new HttpRequestException("no route"));
+        Assert.Equal(ServiceFailure.Network, (await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(offline.Client(), "k").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None))).Failure);
+
+        var slow = new FakeHttp(async (_, _, token) => { await Task.Delay(Timeout.Infinite, token); return FakeHttp.Response(HttpStatusCode.OK); });
+        Assert.Equal(ServiceFailure.Timeout, (await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(slow.Client(), "k", timeout: TimeSpan.FromMilliseconds(100)).ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None))).Failure);
+    }
+
+    [Fact]
+    public async Task InputLimitsAndMissingKey()
+    {
+        var http = FakeHttp.Reply(HttpStatusCode.OK, Reply(Entities));
+        var parser = new OpenRouterParser(http.Client(), "k");
+        await Assert.ThrowsAsync<ArgumentException>(() => parser.ParseTextAsync(new string('x', TextHeuristics.MaxChars + 1), DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Empty(http.Requests);
+
+        var noKey = await Assert.ThrowsAsync<ServiceException>(() =>
+            new OpenRouterParser(http.Client(), " ").ParseTextAsync(Text, DateTimeOffset.UtcNow, CancellationToken.None));
+        Assert.Equal(ServiceFailure.NoKey, noKey.Failure);
+        Assert.Empty(http.Requests);
     }
 }
