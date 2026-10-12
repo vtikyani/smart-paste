@@ -45,9 +45,9 @@ internal sealed class UpdateService : IUpdateService
 
     public string CurrentVersion => AppInfo.Version;
 
-    public async Task<AvailableUpdate?> CheckAsync(CancellationToken ct)
+    public async Task<UpdateCheckResult> CheckAsync(CancellationToken ct)
     {
-        if (_manager is not { IsInstalled: true } manager) return null;
+        if (_manager is not { IsInstalled: true } manager) return UpdateCheckResult.Failed;
 
         var check = manager.CheckForUpdatesAsync();
         // When the wait below gives up, the check keeps running. Observe its result so a late failure is not
@@ -60,17 +60,17 @@ internal sealed class UpdateService : IUpdateService
             if (info is null)
             {
                 Log.Event("update_check", ("outcome", "up_to_date"));
-                return null;
+                return UpdateCheckResult.UpToDate;
             }
 
             var update = new VelopackUpdate(info);
             Log.Event("update_check", ("outcome", "available"), ("version", update.Version));
-            return update;
+            return UpdateCheckResult.Found(update);
         }
         catch (Exception ex) when (IsFailure(ex, ct))
         {
             LogFailure("update_check_error", ex);
-            return null;
+            return UpdateCheckResult.Failed;
         }
     }
 
@@ -103,17 +103,17 @@ internal sealed class UpdateService : IUpdateService
         }
     }
 
-    public void ApplyAndRestart(AvailableUpdate update)
+    public bool ApplyAndRestart(AvailableUpdate update)
     {
         var target = Unwrap(update);
-        if (_manager is not { IsInstalled: true } manager) return;
+        if (_manager is not { IsInstalled: true } manager) return false;
 
         // The newest package on disk that is newer than this version, put there by DownloadAsync.
         var downloaded = manager.UpdatePendingRestart;
         if (downloaded is null || downloaded.Version < target.Info.TargetFullRelease.Version)
         {
             Log.Event("update_apply_skipped", ("reason", "not_downloaded"));
-            return;
+            return false;
         }
 
         try
@@ -125,11 +125,12 @@ internal sealed class UpdateService : IUpdateService
         catch (Exception ex) when (ex is IOException or Win32Exception or InvalidOperationException or UnauthorizedAccessException)
         {
             Log.Error("update_apply_error", ex);
-            return;
+            return false;
         }
 
         Log.Event("update_apply", ("version", downloaded.Version.ToString()));
         _exitApp();
+        return true;
     }
 
     private static UpdateManager? CreateManager()

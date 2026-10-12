@@ -77,24 +77,24 @@ internal sealed partial class AboutViewModel : ObservableObject, IDisposable
         Show(UpdateStage.Checking, "Checking for updates…");
         try
         {
-            var update = await _context.Services.Updates.CheckAsync(_lifetime.Token);
-            if (update is null)
+            var result = await _context.Services.Updates.CheckAsync(_lifetime.Token);
+            switch (result.Status)
             {
-                Show(UpdateStage.UpToDate, $"You're up to date. Checked at {StatusText.Moment(DateTimeOffset.Now, DateTimeOffset.Now)}.");
-                return;
+                case UpdateCheckStatus.Available when result.Update is { } update:
+                    // Share it with the tray, which shows that an update is waiting.
+                    _context.Services.State.Update = update;
+                    ShowAvailable(update);
+                    break;
+                case UpdateCheckStatus.UpToDate:
+                    Show(UpdateStage.UpToDate, $"You're up to date. Checked at {StatusText.Moment(DateTimeOffset.Now, DateTimeOffset.Now)}.");
+                    break;
+                default:
+                    Show(UpdateStage.Failed, "Couldn't check for updates. Check your internet connection, then try again.");
+                    break;
             }
-            // Share it with the tray, which shows that an update is waiting.
-            _context.Services.State.Update = update;
-            ShowAvailable(update);
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
-        }
-        catch (Exception ex)
-        {
-            // The update service reports through exceptions; any of them means "no answer this time".
-            Log.Error("update_check_error", ex);
-            Show(UpdateStage.Failed, "Couldn't check for updates. Check your internet connection, then try again.");
         }
     }
 
@@ -107,18 +107,21 @@ internal sealed partial class AboutViewModel : ObservableObject, IDisposable
         try
         {
             var progress = new Progress<int>(percent => DownloadPercent = Math.Clamp(percent, 0, 100));
-            await _context.Services.Updates.DownloadAsync(update, progress, _lifetime.Token);
+            if (!await _context.Services.Updates.DownloadAsync(update, progress, _lifetime.Token))
+            {
+                _available = null;
+                Show(UpdateStage.Failed, "Couldn't download the update. Check your internet connection, then try again.");
+                return;
+            }
             Show(UpdateStage.Restarting, "Restarting…");
-            _context.Services.Updates.ApplyAndRestart(update);
+            if (!_context.Services.Updates.ApplyAndRestart(update))
+            {
+                _available = null;
+                Show(UpdateStage.Failed, "Couldn't install the update. Try again, or download it from the website.");
+            }
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {
-        }
-        catch (Exception ex)
-        {
-            Log.Error("update_install_error", ex);
-            _available = null;
-            Show(UpdateStage.Failed, "Couldn't download the update. Check your internet connection, then try again.");
         }
     }
 

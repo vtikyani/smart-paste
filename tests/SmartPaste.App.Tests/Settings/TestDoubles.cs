@@ -112,17 +112,26 @@ internal sealed class FakeUpdateService : IUpdateService
 
     public AvailableUpdate? Applied { get; private set; }
 
-    public Task<AvailableUpdate?> CheckAsync(CancellationToken ct) =>
-        FailChecks ? Task.FromException<AvailableUpdate?>(new HttpRequestException("offline")) : Task.FromResult(Available);
+    public Task<UpdateCheckResult> CheckAsync(CancellationToken ct) => Task.FromResult(
+        FailChecks ? UpdateCheckResult.Failed
+        : Available is { } update ? UpdateCheckResult.Found(update)
+        : UpdateCheckResult.UpToDate);
 
-    public Task DownloadAsync(AvailableUpdate update, IProgress<int>? progress, CancellationToken ct)
+    public bool FailDownloads { get; set; }
+
+    public Task<bool> DownloadAsync(AvailableUpdate update, IProgress<int>? progress, CancellationToken ct)
     {
+        if (FailDownloads) return Task.FromResult(false);
         progress?.Report(50);
         progress?.Report(100);
-        return Task.CompletedTask;
+        return Task.FromResult(true);
     }
 
-    public void ApplyAndRestart(AvailableUpdate update) => Applied = update;
+    public bool ApplyAndRestart(AvailableUpdate update)
+    {
+        Applied = update;
+        return true;
+    }
 }
 
 internal sealed class FakePracticeEngine : IPracticeEngine

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using SmartPaste.App.Infrastructure;
+using SmartPaste.App.Services;
 using Velopack;
 using Velopack.Locators;
 using Velopack.Logging;
@@ -40,7 +41,7 @@ public sealed class UpdateServiceTests : IDisposable
 
         Assert.False(service.IsSupported);
         Assert.Equal(AppInfo.Version, service.CurrentVersion);
-        Assert.Null(await service.CheckAsync(CancellationToken.None));
+        Assert.Equal(UpdateCheckStatus.Failed, (await service.CheckAsync(CancellationToken.None)).Status);
     }
 
     [Fact]
@@ -50,7 +51,7 @@ public sealed class UpdateServiceTests : IDisposable
         var service = new UpdateService(new UpdateManager(source, null, new NotInstalledLocator()), () => { }, Generous, Generous);
 
         Assert.False(service.IsSupported);
-        Assert.Null(await service.CheckAsync(CancellationToken.None));
+        Assert.Equal(UpdateCheckStatus.Failed, (await service.CheckAsync(CancellationToken.None)).Status);
         Assert.Equal(0, source.FeedRequests);
     }
 
@@ -60,8 +61,10 @@ public sealed class UpdateServiceTests : IDisposable
         var service = Installed(new FakeSource { Feed = [Full("1.0.0"), Full("1.1.0", "Fixes the picker.")] });
 
         Assert.True(service.IsSupported);
-        var update = await service.CheckAsync(CancellationToken.None);
+        var result = await service.CheckAsync(CancellationToken.None);
+        var update = result.Update;
 
+        Assert.Equal(UpdateCheckStatus.Available, result.Status);
         Assert.NotNull(update);
         Assert.Equal("1.1.0", update.Version);
         Assert.Equal("Fixes the picker.", update.ReleaseNotesMarkdown);
@@ -73,7 +76,7 @@ public sealed class UpdateServiceTests : IDisposable
     {
         var service = Installed(new FakeSource { Feed = [Full("1.0.0")] });
 
-        Assert.Null(await service.CheckAsync(CancellationToken.None));
+        Assert.Equal(UpdateCheckStatus.UpToDate, (await service.CheckAsync(CancellationToken.None)).Status);
         Assert.Contains("update_check outcome=up_to_date", Logged());
     }
 
@@ -84,7 +87,7 @@ public sealed class UpdateServiceTests : IDisposable
             new FailingDownloader(HttpStatusCode.NotFound));
         var service = Installed(github);
 
-        Assert.Null(await service.CheckAsync(CancellationToken.None));
+        Assert.Equal(UpdateCheckStatus.Failed, (await service.CheckAsync(CancellationToken.None)).Status);
         var log = Logged();
         Assert.Contains("update_check_error status=404 error=HttpRequestException", log);
         Assert.DoesNotContain("github", log);
@@ -95,7 +98,7 @@ public sealed class UpdateServiceTests : IDisposable
     {
         var service = Installed(new FakeSource { FeedNeverAnswers = true }, checkTimeout: TimeSpan.FromMilliseconds(50));
 
-        Assert.Null(await service.CheckAsync(CancellationToken.None));
+        Assert.Equal(UpdateCheckStatus.Failed, (await service.CheckAsync(CancellationToken.None)).Status);
         Assert.Contains("update_check_error reason=timeout", Logged());
     }
 
@@ -114,7 +117,7 @@ public sealed class UpdateServiceTests : IDisposable
         byte[] package = [1, 2, 3, 4, 5, 6, 7, 8];
         var release = Full("1.1.0", payload: package);
         var service = Installed(new FakeSource { Feed = [release], Payload = package });
-        var update = await service.CheckAsync(CancellationToken.None);
+        var update = (await service.CheckAsync(CancellationToken.None)).Update;
         var progress = new RecordingProgress();
 
         Assert.True(await service.DownloadAsync(update!, progress, CancellationToken.None));
@@ -128,7 +131,7 @@ public sealed class UpdateServiceTests : IDisposable
     {
         var failure = new HttpRequestException("connection reset", null, HttpStatusCode.BadGateway);
         var service = Installed(new FakeSource { Feed = [Full("1.1.0")], DownloadError = failure });
-        var update = await service.CheckAsync(CancellationToken.None);
+        var update = (await service.CheckAsync(CancellationToken.None)).Update;
 
         Assert.False(await service.DownloadAsync(update!, null, CancellationToken.None));
         Assert.Contains("update_download_error status=502 error=HttpRequestException", Logged());
@@ -140,7 +143,7 @@ public sealed class UpdateServiceTests : IDisposable
     {
         var service = Installed(new FakeSource { Feed = [Full("1.1.0")], DownloadStalls = true },
             downloadTimeout: TimeSpan.FromMilliseconds(100));
-        var update = await service.CheckAsync(CancellationToken.None);
+        var update = (await service.CheckAsync(CancellationToken.None)).Update;
 
         Assert.False(await service.DownloadAsync(update!, null, CancellationToken.None));
         Assert.Contains("update_download_error reason=timeout", Logged());
@@ -151,9 +154,9 @@ public sealed class UpdateServiceTests : IDisposable
     {
         var exits = 0;
         var service = Installed(new FakeSource { Feed = [Full("1.1.0")] }, exitApp: () => exits++);
-        var update = await service.CheckAsync(CancellationToken.None);
+        var update = (await service.CheckAsync(CancellationToken.None)).Update;
 
-        service.ApplyAndRestart(update!);
+        Assert.False(service.ApplyAndRestart(update!));
 
         Assert.Equal(0, exits);
         Assert.Contains("update_apply_skipped reason=not_downloaded", Logged());

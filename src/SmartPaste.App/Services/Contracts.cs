@@ -101,6 +101,21 @@ public abstract class AvailableUpdate
     public abstract string? ReleaseNotesMarkdown { get; }
 }
 
+public enum UpdateCheckStatus
+{
+    UpToDate,
+    Available,
+    // No answer this time (offline, GitHub's rate limit, no releases yet). Already logged.
+    Failed
+}
+
+public sealed record UpdateCheckResult(UpdateCheckStatus Status, AvailableUpdate? Update)
+{
+    public static readonly UpdateCheckResult UpToDate = new(UpdateCheckStatus.UpToDate, null);
+    public static readonly UpdateCheckResult Failed = new(UpdateCheckStatus.Failed, null);
+    public static UpdateCheckResult Found(AvailableUpdate update) => new(UpdateCheckStatus.Available, update);
+}
+
 public interface IUpdateService
 {
     // False when running from a build folder rather than an installed copy; updates are then unavailable.
@@ -108,13 +123,15 @@ public interface IUpdateService
 
     string CurrentVersion { get; }
 
-    Task<AvailableUpdate?> CheckAsync(CancellationToken ct);
+    // Never throws for network problems: those come back as Failed. Only the caller's cancellation throws.
+    Task<UpdateCheckResult> CheckAsync(CancellationToken ct);
 
     // True when the update is on disk and ready to install; false when the download failed (already logged).
     Task<bool> DownloadAsync(AvailableUpdate update, IProgress<int>? progress, CancellationToken ct);
 
-    // Exits the app, installs the downloaded update, and starts the new version.
-    void ApplyAndRestart(AvailableUpdate update);
+    // Hands over to the updater and exits the app; the updater installs the update and starts the new version.
+    // False (already logged) when that could not start, for example when the update is not downloaded yet.
+    bool ApplyAndRestart(AvailableUpdate update);
 }
 
 // ---- Connection checks for the settings page and the welcome tour ----
