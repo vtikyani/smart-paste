@@ -60,11 +60,12 @@ internal static class Taskbar
         return size > 0 ? size : (int)Math.Round(16 * dpi / 96.0);
     }
 
-    // The large-icon size at a DPI (32 px at 100 %), used for notification icons.
-    public static int LargeIconSize(int dpi)
+    // The size a notification's own icon must have: the large-icon size at the display scale Windows had at sign-in
+    // (32 px at 100 %). The shell rejects any other size, even after the scale changes.
+    public static int NotificationIconSize()
     {
-        var size = NativeMethods.GetSystemMetricsForDpi(NativeMethods.SmCxIcon, (uint)dpi);
-        return size > 0 ? size : (int)Math.Round(32 * dpi / 96.0);
+        var size = NativeMethods.GetSystemMetrics(NativeMethods.SmCxIcon);
+        return size > 0 ? size : 32;
     }
 
     private static class NativeMethods
@@ -114,5 +115,8 @@ internal static class Taskbar
 
         [DllImport("user32.dll")]
         public static extern int GetSystemMetricsForDpi(int index, uint dpi);
+
+        [DllImport("user32.dll")]
+        public static extern int GetSystemMetrics(int index);
     }
 }
