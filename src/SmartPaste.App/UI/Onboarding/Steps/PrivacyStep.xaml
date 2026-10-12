@@ -1,0 +1,95 @@
+<UserControl
+  x:Class="SmartPaste.App.UI.Onboarding.Steps.PrivacyStep"
+  x:ClassModifier="internal"
+  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+
+  <UserControl.Resources>
+    <ResourceDictionary Source="/SmartPaste;component/UI/Onboarding/OnboardingStyles.xaml" />
+  </UserControl.Resources>
+
+  <StackPanel VerticalAlignment="Center">
+    <TextBlock Style="{StaticResource Onboarding.Title}" Text="What leaves your PC" />
+    <TextBlock Style="{StaticResource Onboarding.Lead}" Text="Smart Paste sends only what a paste needs, and only while you use it." />
+
+    <Grid Margin="0,26,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="28" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="22" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <Grid>
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Style="{StaticResource Settings.IconTile}">
+          <ui:SymbolIcon HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" Symbol="ShieldLock24" />
+        </Border>
+        <StackPanel Grid.Column="1" Margin="14,0,0,0">
+          <TextBlock Style="{StaticResource Onboarding.ItemTitle}" Text="Sensitive fields are off-limits" />
+          <TextBlock Style="{StaticResource Onboarding.ItemText}" Text="Passwords, card details and SSNs get a normal paste. Jev never sees them." />
+        </StackPanel>
+      </Grid>
+
+      <Grid Grid.Column="2">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Style="{StaticResource Settings.IconTile}">
+          <ui:SymbolIcon HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" Symbol="TextField24" />
+        </Border>
+        <StackPanel Grid.Column="1" Margin="14,0,0,0">
+          <TextBlock Style="{StaticResource Onboarding.ItemTitle}" Text="Only what a paste needs" />
+          <TextBlock Style="{StaticResource Onboarding.ItemText}" Text="With a key, contact details you copy go to OpenRouter to be read. Field labels and your values, shortened, go to Jev." />
+        </StackPanel>
+      </Grid>
+
+      <Grid Grid.Row="2">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Style="{StaticResource Settings.IconTile}">
+          <ui:SymbolIcon HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" Symbol="EyeOff24" />
+        </Border>
+        <StackPanel Grid.Column="1" Margin="14,0,0,0">
+          <TextBlock Style="{StaticResource Onboarding.ItemTitle}" Text="No tracking" />
+          <TextBlock Style="{StaticResource Onboarding.ItemText}" Text="No analytics and no account. The logs never contain what you copy." />
+        </StackPanel>
+      </Grid>
+
+      <Grid Grid.Row="2" Grid.Column="2">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="Auto" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <Border Style="{StaticResource Settings.IconTile}">
+          <ui:SymbolIcon HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="20" Symbol="Timer24" />
+        </Border>
+        <StackPanel Grid.Column="1" Margin="14,0,0,0">
+          <TextBlock Style="{StaticResource Onboarding.ItemTitle}" Text="Copies don't linger" />
+          <TextBlock Style="{StaticResource Onboarding.ItemText}">
+            <Run Text="Your copied block stays in memory only and is forgotten after" />
+            <Run Text="{Binding BlockLifetime, Mode=OneWay}" /><Run Text="." />
+          </TextBlock>
+        </StackPanel>
+      </Grid>
+    </Grid>
+
+    <ui:HyperlinkButton
+      Margin="-6,22,0,0"
+      HorizontalAlignment="Left"
+      Command="{Binding OpenPrivacySettingsCommand}"
+      Content="See every detail in Settings"
+      Icon="{ui:SymbolIcon ShieldCheckmark24}" />
+  </StackPanel>
+</UserControl>
