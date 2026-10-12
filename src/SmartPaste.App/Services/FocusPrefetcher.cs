@@ -14,6 +14,9 @@ internal sealed class FocusPrefetcher : IDisposable
 {
     private static readonly TimeSpan Debounce = TimeSpan.FromMilliseconds(150);
     private static readonly TimeSpan AheadDeadline = TimeSpan.FromSeconds(4);
+    // Reading a label off the screen is local and usually takes a few hundred milliseconds; it must never hold a
+    // paste up for long.
+    private static readonly TimeSpan OcrDeadline = TimeSpan.FromMilliseconds(700);
     private const int PreviewLength = 28;
 
     private readonly FocusInspector _focus;
@@ -48,6 +51,7 @@ internal sealed class FocusPrefetcher : IDisposable
         focus.FocusChanged += OnFocusChanged;
         profiles.Changed += OnProfileChanged;
         settings.Changed += OnSettingsChanged;
+        CredentialStore.Changed += OnKeysChanged;
     }
 
     // Starts or stops watching focus to match the app's state. Call after the app turns on, off, or pauses.
@@ -89,8 +93,12 @@ internal sealed class FocusPrefetcher : IDisposable
             try
             {
                 var decided = await ahead.Decision.WaitAsync(FieldDecider.PasteDeadline, ct);
-                Log.Event("ask_ahead_used", ("source", decided.Decision.Source));
-                return decided;
+                // An answer made while Jev could not be reached came from the local list: ask again now.
+                if (decided.Decision.JevFailure is null)
+                {
+                    Log.Event("ask_ahead_used", ("source", decided.Decision.Source));
+                    return decided;
+                }
             }
             catch (TimeoutException)
             {
@@ -165,8 +173,18 @@ internal sealed class FocusPrefetcher : IDisposable
     {
         var context = field.Context;
         if (context.IsPassword || context.HasUsableLabel || !_ocr.IsAvailable) return field;
-        var label = await _ocr.ReadLabelNearAsync(field.Bounds, ct);
-        return string.IsNullOrWhiteSpace(label) ? field : field with { Context = context with { OcrText = label } };
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limit.CancelAfter(OcrDeadline);
+        try
+        {
+            var label = await _ocr.ReadLabelNearAsync(field.Bounds, limit.Token);
+            return string.IsNullOrWhiteSpace(label) ? field : field with { Context = context with { OcrText = label } };
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            Log.Event("ocr_label_timeout");
+            return field;
+        }
     }
 
     private void ShowHint(FocusedField field, Decision decision)
@@ -196,6 +214,13 @@ internal sealed class FocusPrefetcher : IDisposable
 
     private void OnProfileChanged() => _dispatcher.BeginInvoke(Refresh);
 
+    // New keys: answers made without Jev (or with the old key) no longer stand.
+    private void OnKeysChanged(string target) => _dispatcher.BeginInvoke(() =>
+    {
+        Forget();
+        if (_watching && _focused is not null) _debounce.Start();
+    });
+
     private void OnSettingsChanged(AppSettings previous, AppSettings current)
     {
         _dispatcher.BeginInvoke(() =>
@@ -221,6 +246,7 @@ internal sealed class FocusPrefetcher : IDisposable
         _focus.FocusChanged -= OnFocusChanged;
         _profiles.Changed -= OnProfileChanged;
         _settings.Changed -= OnSettingsChanged;
+        CredentialStore.Changed -= OnKeysChanged;
         if (_watching) _focus.StopWatchingFocus();
         _work.Cancel();
         _work.Dispose();

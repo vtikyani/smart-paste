@@ -65,9 +65,10 @@ internal sealed class ClipboardPaster : IDisposable
     public IntPtr WindowHandle => _window.Handle;
 
     // Cancellation is honored until Ctrl+V is sent; after that the paste is seen through, because restoring the
-    // clipboard early could make the target paste the whole original copy. delivered runs once the target has read
-    // the value (or will not), before the grace period and the restore: keys typed meanwhile may go on from there.
-    public async Task<PasteOutcome> PasteValueAsync(string value, PasteTarget target, CancellationToken ct, Action? delivered = null)
+    // clipboard early could make the target paste the whole original copy. stillWanted is asked once more right
+    // before Ctrl+V goes out, after the clipboard is prepared (which can take a moment with Office's formats): false
+    // puts the clipboard back and pastes nothing. Returns only once the user's clipboard is back.
+    public async Task<PasteOutcome> PasteValueAsync(string value, PasteTarget target, CancellationToken ct, Func<bool>? stillWanted = null)
     {
         ArgumentNullException.ThrowIfNull(value);
         ArgumentNullException.ThrowIfNull(target);
@@ -77,17 +78,25 @@ internal sealed class ClipboardPaster : IDisposable
             ct.ThrowIfCancellationRequested();
             if (!IsForeground(target))
             {
-                Log.Event("paste_target_changed");
+                Log.Event("paste_target_changed", ("stage", "before_prepare"));
                 return PasteOutcome.TargetChanged;
             }
 
             var clock = Stopwatch.StartNew();
             var session = new PasteSession(value, target);
             var install = Install(session, out var snapshot);
-            if (install != InstallResult.Installed) return await FallBackAsync(install, session, snapshot, target);
+            if (install != InstallResult.Installed) return await FallBackAsync(install, session, snapshot, target, stillWanted);
 
             _session = session;
             _snapshot = snapshot;
+            // The last look before anything reaches the target: the request may have expired meanwhile (its held keys
+            // already went to the app), or the user may have switched windows.
+            if (ct.IsCancellationRequested || stillWanted?.Invoke() == false || !IsForeground(target))
+            {
+                await RestoreWithRetryAsync(session, snapshot);
+                Log.Event("paste_target_changed", ("stage", "before_send"));
+                return PasteOutcome.TargetChanged;
+            }
             if (!KeySender.SendPaste())
             {
                 await RestoreWithRetryAsync(session, snapshot);
@@ -103,7 +112,6 @@ internal sealed class ClipboardPaster : IDisposable
             {
                 // The target never read the value; restore anyway so the clipboard is not left borrowed.
             }
-            delivered?.Invoke();
             if (session.Consumed && !session.Superseded) await Task.Delay(Grace);
 
             var restore = await RestoreWithRetryAsync(session, snapshot);
@@ -120,13 +128,29 @@ internal sealed class ClipboardPaster : IDisposable
         }
     }
 
-    // A plain Ctrl+V of whatever is on the clipboard, if the target still has the foreground.
-    public bool PastePlain(PasteTarget target)
+    // A plain Ctrl+V of whatever is on the clipboard, if the target still has the foreground. Waits for a smart paste
+    // still in flight to put the user's clipboard back first, so it can never paste a borrowed value.
+    public async Task<bool> PastePlainAsync(PasteTarget target, Func<bool>? stillWanted = null)
     {
         ArgumentNullException.ThrowIfNull(target);
+        await _oneAtATime.WaitAsync();
+        try
+        {
+            return SendPlain(target, stillWanted);
+        }
+        finally
+        {
+            _oneAtATime.Release();
+        }
+    }
+
+    // Caller holds _oneAtATime.
+    private static bool SendPlain(PasteTarget target, Func<bool>? stillWanted)
+    {
+        if (stillWanted?.Invoke() == false) return false;
         if (!IsForeground(target))
         {
-            Log.Event("paste_target_changed");
+            Log.Event("paste_target_changed", ("stage", "plain"));
             return false;
         }
         return KeySender.SendPaste();
@@ -139,15 +163,14 @@ internal sealed class ClipboardPaster : IDisposable
         _window.Dispose();
     }
 
-    // The target counts as unchanged when the foreground window is the same, or belongs to the same app (an owned
-    // dialog or popup of the target).
+    // The target counts as unchanged when the foreground window is the target window itself, or a dialog or popup it
+    // owns. Another window of the same app does not count: browsers run all their windows in one process, and every
+    // UWP app's frame belongs to ApplicationFrameHost.
     private static bool IsForeground(PasteTarget target)
     {
         var foreground = NativeMethods.GetForegroundWindow();
-        if (foreground == target.Window) return true;
         if (foreground == IntPtr.Zero) return false;
-        NativeMethods.GetWindowThreadProcessId(foreground, out var processId);
-        return processId != 0 && (processId == target.WindowProcessId || processId == target.FocusProcessId);
+        return foreground == target.Window || NativeMethods.GetAncestor(foreground, NativeMethods.GaRootOwner) == target.Window;
     }
 
     private InstallResult Install(PasteSession session, out IReadOnlyList<ClipboardItem> snapshot)
@@ -190,10 +213,10 @@ internal sealed class ClipboardPaster : IDisposable
     }
 
     private async Task<PasteOutcome> FallBackAsync(
-        InstallResult install, PasteSession session, IReadOnlyList<ClipboardItem> snapshot, PasteTarget target)
+        InstallResult install, PasteSession session, IReadOnlyList<ClipboardItem> snapshot, PasteTarget target, Func<bool>? stillWanted)
     {
         if (install == InstallResult.Broken) await RestoreWithRetryAsync(session, snapshot);
-        var pasted = PastePlain(target);
+        var pasted = SendPlain(target, stillWanted);
         Log.Event("paste_clipboard", ("outcome", PasteOutcome.Failed), ("reason", install), ("stage", pasted ? "plain" : "none"));
         return PasteOutcome.Failed;
     }

@@ -12,6 +12,7 @@ internal static partial class NativeMethods
     public const int ErrorInsufficientBuffer = 122;
 
     public const uint GaRoot = 2;
+    public const uint GaRootOwner = 3;
     public const int DwmwaExtendedFrameBounds = 9;
 
     public const uint SmtoAbortIfHung = 0x0002;

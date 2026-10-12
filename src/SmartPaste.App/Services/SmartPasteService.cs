@@ -7,13 +7,15 @@ using SmartPaste.Core;
 namespace SmartPaste.App.Services;
 
 // What Ctrl+V does while a block is armed, and what the picker shortcut does. Every Ctrl+V the keyboard hook hands
-// over ends in exactly one of: the value the field wants, a normal paste, or (when the user dismissed the picker)
-// nothing. Keys typed meanwhile are held by the hook and replayed in order once the request is completed.
+// over ends in exactly one of: the value the field wants, a normal paste, or nothing (the user dismissed the picker,
+// or moved to another field or window before the paste could land). Keys typed meanwhile are held by the hook and
+// replayed in order once the request is completed, which happens only after the user's clipboard is back.
 //
 // UI thread: every member, except ShouldIntercept, which the hook calls on its own thread.
 internal sealed class SmartPasteService : IDisposable
 {
     private static readonly TimeSpan InspectBudget = TimeSpan.FromMilliseconds(600);
+    private static readonly TimeSpan RecheckBudget = TimeSpan.FromMilliseconds(400);
     private static readonly TimeSpan WorkingDelay = TimeSpan.FromMilliseconds(250);
 
     private readonly KeyboardHook _hook;
@@ -68,6 +70,8 @@ internal sealed class SmartPasteService : IDisposable
         var target = new PasteTarget(request.ForegroundWindow, request.WindowProcessId, request.WindowProcessId);
         var anchor = CursorAnchor();
         var record = new PasteRecord();
+        // Nothing may reach the target once the hook has given the held keys back: it would land after them.
+        Func<bool> stillWanted = () => !request.IsExpired;
         DispatcherTimer? working = null;
         try
         {
@@ -76,7 +80,7 @@ internal sealed class SmartPasteService : IDisposable
             if (_profiles.Current is not { } armed)
             {
                 record.Reason = "no_profile";
-                record.Pasted = _paster.PastePlain(target);
+                record.Pasted = await _paster.PastePlainAsync(target, stillWanted);
                 return;
             }
 
@@ -86,7 +90,7 @@ internal sealed class SmartPasteService : IDisposable
             {
                 // Not an editable text field (a document, a terminal, a list): Ctrl+V does its usual thing.
                 record.Reason = "not_a_field";
-                record.Pasted = _paster.PastePlain(target);
+                record.Pasted = await _paster.PastePlainAsync(target, stillWanted);
                 return;
             }
 
@@ -104,26 +108,24 @@ internal sealed class SmartPasteService : IDisposable
             {
                 case DecisionKind.Value when decision.Value is { } value:
                     record.Key = decision.Key;
-                    record.Pasted = await PasteValueAsync(value, target, request.Expired, request.Complete);
-                    record.Outcome = record.Pasted ? ActivityOutcome.Pasted : ActivityOutcome.Skipped;
+                    await PasteValueAsync(value, field, target, record, ct, stillWanted);
                     break;
 
                 case DecisionKind.Picker:
                     var picked = await _feedback.PickAsync(
                         new PickRequest(decision.Candidates, PickMode.Ambiguous, anchor, record.Label), ct);
-                    await ApplyPickAsync(picked, context, target, record, request.Expired, request.Complete);
+                    await ApplyPickAsync(picked, field, context, armed.Profile, target, record, PickMode.Ambiguous, ct, stillWanted);
                     break;
 
                 default:
-                    record.Pasted = _paster.PastePlain(target);
+                    record.Pasted = await _paster.PastePlainAsync(target, stillWanted);
                     record.Outcome = ActivityOutcome.PastedOriginal;
                     break;
             }
 
-            if (record.Pasted && record.Outcome == ActivityOutcome.Pasted && record.Key is { } key && _settings.Current.ShowPasteConfirmation)
-                _feedback.ShowPasted(anchor, FieldKeys.DisplayName(key));
+            ConfirmPaste(record, anchor);
         }
-        catch (OperationCanceledException) when (request.Expired.IsCancellationRequested)
+        catch (OperationCanceledException) when (request.IsExpired)
         {
             // The safety timeout already gave the keyboard back: pasting now would land out of order.
             record.Reason = "expired";
@@ -132,7 +134,7 @@ internal sealed class SmartPasteService : IDisposable
         {
             Log.Error("paste_error", ex);
             record.Reason = "error";
-            if (!record.Pasted && !request.Expired.IsCancellationRequested) record.Pasted = _paster.PastePlain(target);
+            if (!record.Pasted && !request.IsExpired) record.Pasted = await _paster.PastePlainAsync(target, stillWanted);
         }
         finally
         {
@@ -159,13 +161,18 @@ internal sealed class SmartPasteService : IDisposable
             var anchor = field is null ? CaretLocator.Locate(window, null) : CaretLocator.Locate(window, field.Bounds);
             record.Label = field?.Context.BestLabel() ?? "";
             record.App = field?.Context.AppName;
-            // With nothing armed the picker opens empty and says how to fill it.
-            IReadOnlyList<Candidate> candidates = _profiles.Current is { } armed ? FieldDecider.AllCandidates(armed.Profile, field?.Context) : [];
+            if (_profiles.Current is not { } armed)
+            {
+                record.Reason = "nothing_armed";
+                _feedback.ShowNotice(anchor, "Copy a block of details first, then press this again.");
+                return;
+            }
+
+            var candidates = FieldDecider.AllCandidates(armed.Profile, field?.Context);
             var picked = await _feedback.PickAsync(new PickRequest(candidates, PickMode.AllValues, anchor, field?.Context.BestLabel()), CancellationToken.None);
             var target = new PasteTarget(window, processId, field?.ProcessId ?? processId);
-            await ApplyPickAsync(picked, field?.Context, target, record, CancellationToken.None, delivered: null);
-            if (record.Pasted && record.Key is { } key && _settings.Current.ShowPasteConfirmation)
-                _feedback.ShowPasted(anchor, FieldKeys.DisplayName(key));
+            await ApplyPickAsync(picked, field, field?.Context, armed.Profile, target, record, PickMode.AllValues, CancellationToken.None, stillWanted: null);
+            ConfirmPaste(record, anchor);
         }
         catch (Exception ex)
         {
@@ -178,20 +185,21 @@ internal sealed class SmartPasteService : IDisposable
         }
     }
 
-    private async Task ApplyPickAsync(PickResult picked, FieldContext? context, PasteTarget target, PasteRecord record,
-        CancellationToken ct, Action? delivered)
+    private async Task ApplyPickAsync(PickResult picked, FocusedField? field, FieldContext? context, Profile profile,
+        PasteTarget target, PasteRecord record, PickMode mode, CancellationToken ct, Func<bool>? stillWanted)
     {
         switch (picked.Outcome)
         {
             case PickOutcome.Chosen when picked.Candidate is { } chosen:
                 record.Key = chosen.Key;
                 record.DecidedBy = DecisionMaker.User;
-                if (context is not null) _decisions.LearnChoice(context, chosen);
-                record.Pasted = await PasteValueAsync(chosen.Value, target, ct, delivered);
-                record.Outcome = record.Pasted ? ActivityOutcome.Pasted : ActivityOutcome.Skipped;
+                if (context is not null) _decisions.LearnChoice(context, chosen, profile);
+                await PasteValueAsync(chosen.Value, field, target, record, ct, stillWanted);
                 break;
-            case PickOutcome.PasteOriginal:
-                record.Pasted = _paster.PastePlain(target);
+            // Escape in the Ctrl+V picker means "just paste what I copied". The shortcut's picker was never a paste,
+            // so there it only closes.
+            case PickOutcome.PasteOriginal when mode == PickMode.Ambiguous:
+                record.Pasted = await _paster.PastePlainAsync(target, stillWanted);
                 record.Outcome = ActivityOutcome.PastedOriginal;
                 break;
             default:
@@ -201,10 +209,33 @@ internal sealed class SmartPasteService : IDisposable
         }
     }
 
-    private async Task<bool> PasteValueAsync(string value, PasteTarget target, CancellationToken ct, Action? delivered)
+    // Pastes a value into the field decided on, if focus is still there: a click into another field while Jev was
+    // deciding (or while the picker was open) must not send the value there.
+    private async Task PasteValueAsync(string value, FocusedField? field, PasteTarget target, PasteRecord record,
+        CancellationToken ct, Func<bool>? stillWanted)
     {
-        var outcome = await _paster.PasteValueAsync(value, target, ct, delivered);
-        return outcome is PasteOutcome.Consumed or PasteOutcome.NotConsumed or PasteOutcome.Superseded;
+        if (field is not null && !await FocusUnchangedAsync(field, ct))
+        {
+            record.Reason = "focus_moved";
+            record.Outcome = ActivityOutcome.Skipped;
+            return;
+        }
+        var outcome = await _paster.PasteValueAsync(value, target, ct, stillWanted);
+        record.Pasted = outcome is PasteOutcome.Consumed or PasteOutcome.NotConsumed or PasteOutcome.Superseded;
+        if (outcome == PasteOutcome.TargetChanged) record.Reason = "target_changed";
+        record.Outcome = record.Pasted ? ActivityOutcome.Pasted : ActivityOutcome.Skipped;
+    }
+
+    private async Task<bool> FocusUnchangedAsync(FocusedField field, CancellationToken ct)
+    {
+        var now = await _focus.InspectAsync(RecheckBudget, ct);
+        return now is not null && now.RuntimeId.AsSpan().SequenceEqual(field.RuntimeId);
+    }
+
+    private void ConfirmPaste(PasteRecord record, ScreenRect anchor)
+    {
+        if (record.Pasted && record.Outcome == ActivityOutcome.Pasted && record.Key is { } key && _settings.Current.ShowPasteConfirmation)
+            _feedback.ShowPasted(anchor, FieldKeys.DisplayName(key));
     }
 
     // The "working" chip appears only when a decision takes longer than a moment.
@@ -228,7 +259,9 @@ internal sealed class SmartPasteService : IDisposable
 
     private void Finish(PasteRecord record, Stopwatch clock)
     {
-        Log.Event("paste", ("source", record.Source), ("reason", record.Reason), ("key", record.Key),
+        // Extra keys come from labels in the copied text, so only standard key names are logged.
+        var loggedKey = record.Key is null ? null : FieldKeys.Standard.Contains(record.Key) ? record.Key : "extra";
+        Log.Event("paste", ("source", record.Source), ("reason", record.Reason), ("key", loggedKey),
             ("outcome", record.Outcome), ("app", record.App), ("ms", clock.ElapsedMilliseconds));
         if (record.Outcome is { } outcome && record.Label is { Length: > 0 } label)
             _state.AddActivity(new ActivityEntry(DateTimeOffset.Now, label, record.Key is { } key ? FieldKeys.DisplayName(key) : null,

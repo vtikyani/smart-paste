@@ -22,9 +22,16 @@ internal sealed class CopyPipeline : IDisposable
     private readonly Dispatcher _dispatcher;
     private readonly ServiceGuard _guard;
 
+    // A single slow parse is normal; this many in a row means OpenRouter is effectively unreachable.
+    private const int TimeoutsBeforeUnreachable = 3;
+
     // The copy being handled: set on the UI thread by each clipboard change.
     private int _generation;
     private CancellationToken _token;
+
+    // The copy whose parse turned the "reading" indicator on (UI thread).
+    private int _parsingGeneration;
+    private int _timeoutsInARow;
 
     public CopyPipeline(ClipboardWatcher watcher, ProfileStore profiles, SettingsStore settings, AppState state,
         HttpClient http, WindowsOcr ocr, Dispatcher dispatcher)
@@ -53,8 +60,21 @@ internal sealed class CopyPipeline : IDisposable
         _state.IsParsing = false;
     }
 
-    private void OnTextCopied(string text, string? ownerExe) =>
+    private void OnTextCopied(string text, string? ownerExe)
+    {
+        // Copies made in apps Smart Paste never touches (Remote Desktop, Hyper-V, password managers, and the apps the
+        // user excluded) are never read.
+        if (ownerExe is not null && IsSkippedApp(ownerExe))
+        {
+            Log.Event("copy_skipped", ("reason", "excluded_app"));
+            return;
+        }
         _ = HandleAsync(text, ProfileOrigin.CopiedText, _generation, _token);
+    }
+
+    private bool IsSkippedApp(string exe) =>
+        InterceptGate.BuiltInBlockedApps.Contains(exe, StringComparer.OrdinalIgnoreCase) ||
+        _settings.Current.ExcludedApps.Contains(exe, StringComparer.OrdinalIgnoreCase);
 
     private void OnImageCopied(byte[] png)
     {
@@ -98,13 +118,18 @@ internal sealed class CopyPipeline : IDisposable
                 var merged = ProfileParser.Merge(parsed, local);
                 if (_profiles.Arm(generation, merged, origin, parsedByAi: true))
                     Log.Event("copy_armed", ("source", "ai"), ("count", merged.Keys.Count), ("ms", clock.ElapsedMilliseconds));
+                Interlocked.Exchange(ref _timeoutsInARow, 0);
                 if (_guard.Succeeded()) Publish();
             }
             catch (ServiceException ex)
             {
                 // The local result stays armed.
                 Log.Event("parse_error", ("reason", ex.Failure.ToString()), ("status", ex.StatusCode ?? 0), ("ms", clock.ElapsedMilliseconds));
-                if (_guard.Failed(ex.Failure, DateTimeOffset.Now)) Publish();
+                var changed = ex.Failure == ServiceFailure.Timeout
+                    ? Interlocked.Increment(ref _timeoutsInARow) >= TimeoutsBeforeUnreachable && _guard.Failed(ServiceFailure.Network, DateTimeOffset.Now)
+                    : _guard.Failed(ex.Failure, DateTimeOffset.Now);
+                if (ex.Failure != ServiceFailure.Timeout) Interlocked.Exchange(ref _timeoutsInARow, 0);
+                if (changed) Publish();
             }
             finally
             {
@@ -121,9 +146,20 @@ internal sealed class CopyPipeline : IDisposable
         }
     }
 
+    // The indicator belongs to one copy's parse: a newer copy's parse takes it over, and a parse that ends turns it off
+    // only if it is still the one that turned it on (even when its copy was cleared meanwhile).
     private void SetParsing(int generation, bool parsing) => _dispatcher.BeginInvoke(() =>
     {
-        if (_profiles.IsCurrent(generation)) _state.IsParsing = parsing;
+        if (parsing)
+        {
+            if (!_profiles.IsCurrent(generation)) return;
+            _parsingGeneration = generation;
+            _state.IsParsing = true;
+        }
+        else if (_parsingGeneration == generation)
+        {
+            _state.IsParsing = false;
+        }
     });
 
     private void OnKeysChanged(string target)

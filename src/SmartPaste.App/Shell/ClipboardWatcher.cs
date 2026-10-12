@@ -104,15 +104,11 @@ internal sealed class ClipboardWatcher : IDisposable
         if (owner != IntPtr.Zero && _ignoredOwners.Contains(owner)) return;
 
         Changed?.Invoke();
-        Read(sequence, owner);
+        Read(sequence);
     }
 
-    private void Read(uint sequence, IntPtr owner)
+    private void Read(uint sequence)
     {
-        uint ownerProcessId = 0;
-        if (owner != IntPtr.Zero) NativeMethods.GetWindowThreadProcessId(owner, out ownerProcessId);
-        var ownerName = ProcessInfo.TryGetName(ownerProcessId);
-
         if (!ClipboardAccess.TryOpen(_window.Handle))
         {
             Log.Event("copy_open_failed");
@@ -120,9 +116,18 @@ internal sealed class ClipboardWatcher : IDisposable
         }
 
         string? text = null;
+        string? ownerName = null;
         (byte[] Bytes, bool IsPng)? image = null;
         try
         {
+            // Read with the clipboard open: the owner cannot change until it is closed, so the privacy check below
+            // judges the very content that is read (opening can wait for another app, and a new copy may land meanwhile).
+            var owner = NativeMethods.GetClipboardOwner();
+            if (owner != IntPtr.Zero && _ignoredOwners.Contains(owner)) return;
+            uint ownerProcessId = 0;
+            if (owner != IntPtr.Zero) NativeMethods.GetWindowThreadProcessId(owner, out ownerProcessId);
+            ownerName = ProcessInfo.TryGetName(ownerProcessId);
+
             var formats = ClipboardAccess.EnumerateFormats();
             var names = formats.Where(format => format.Name is not null).Select(format => format.Name!).ToList();
             if (ClipboardPrivacy.ShouldSkip(names, name => ReadDword(formats, name), ownerName))

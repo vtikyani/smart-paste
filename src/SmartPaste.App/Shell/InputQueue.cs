@@ -101,10 +101,13 @@ internal sealed class InputQueue
     private byte _fence;
     private long _deadline;
 
-    public InputQueue(IInputQueueHost host, InputQueueOptions? options = null)
+    // lastSequence continues numbering from an earlier queue, so a completion meant for a request of the previous hook
+    // session can never match a request of this one.
+    public InputQueue(IInputQueueHost host, InputQueueOptions? options = null, int lastSequence = 0)
     {
         _host = host;
         _options = options ?? InputQueueOptions.Default;
+        _lastSequence = lastSequence;
     }
 
     private enum Phase

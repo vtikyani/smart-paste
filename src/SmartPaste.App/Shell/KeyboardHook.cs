@@ -45,6 +45,9 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
     private CaptureSession? _capture;
     private Func<IntPtr, bool>? _interceptFilter;
 
+    // The last request number handed out, kept across Stop and Start (hook thread writes, the next hook thread reads).
+    private int _lastSequence;
+
     public KeyboardHook(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;
@@ -160,7 +163,13 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
         // Creates this thread's message queue before anyone can post to it.
         NativeMethods.PeekMessage(out _, IntPtr.Zero, 0, 0, NativeMethods.PmNoRemove);
 
-        var queue = new InputQueue(new Host(this));
+        // Work and requests left over from the previous hook session (a completion posted just as it stopped) belong
+        // to requests that session already resolved.
+        while (_commands.TryDequeue(out _)) { }
+        _requests.Clear();
+        _injections.Clear();
+
+        var queue = new InputQueue(new Host(this), lastSequence: Volatile.Read(ref _lastSequence));
         queue.Seed(IsKeyDownNow);
         _queue = queue;
         _keyboardHook = NativeMethods.SetWindowsHookEx(
@@ -309,6 +318,7 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
     // Hook thread, possibly inside the callback: create the request and hand it to the UI thread.
     private void Raise(int sequence)
     {
+        Volatile.Write(ref _lastSequence, sequence);
         var window = NativeMethods.GetForegroundWindow();
         NativeMethods.GetWindowThreadProcessId(window, out var processId);
         var request = new PasteRequest(window, processId, sequence, Stopwatch.GetTimestamp(), CompleteFromAnyThread);
