@@ -54,12 +54,14 @@ internal static partial class AddressPatterns
     // The first address in the lines. A postal code counts only next to its city and state ("Springfield, NJ 07081"),
     // as a Canadian code after its city ("Ottawa K1A 0B1"), or as "Springfield 07081" on the street's line or the line
     // below it (below a unit line, if one comes first); never inside a link, an email address, or a house number.
-    public static Address Read(IReadOnlyList<string> lines)
+    // streetKnown says a street was already found elsewhere (a labeled line), so a unit line counts from the start.
+    public static Address Read(IReadOnlyList<string> lines, bool streetKnown = false)
     {
         ArgumentNullException.ThrowIfNull(lines);
         StreetMatch? street = null;
         string? unit = null;
         CityStateZip? place = null;
+        var sawStreet = streetKnown;
         var belowStreet = false;
         foreach (var raw in lines)
         {
@@ -70,11 +72,11 @@ internal static partial class AddressPatterns
             if (street is null && FindStreet(line) is { } found)
             {
                 street = found;
-                unit = found.Unit;
+                unit ??= found.Unit;
                 start = found.Index + found.Length;
-                onStreet = true;
+                onStreet = sawStreet = true;
             }
-            else if (street is not null && unit is null && UnitOnly(line) is { } unitLine)
+            else if (sawStreet && unit is null && UnitOnly(line) is { } unitLine)
             {
                 // "Apt 4B" on a line of its own; the city may still come on the next line.
                 unit = unitLine;

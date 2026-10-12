@@ -4,20 +4,38 @@ namespace SmartPaste.Core;
 
 // Reads a copied block into a profile on this PC, with no network, in milliseconds. It runs on every multi-field
 // copy so Ctrl+V works at once; the parsing model's richer result replaces it when one arrives. Every value comes
-// from the text itself; nothing is invented.
+// from the text itself; nothing is invented, and a guess that is unsure (a name, a postal code) is left out.
 public static partial class LocalExtractor
 {
     private const string Person = "person";
 
-    // Words that make a capitalized first line a heading or a company rather than a person's name.
+    // Words that make a capitalized line a heading, a job title, or a company rather than a person's name.
     private static readonly HashSet<string> NotNameWords = new(StringComparer.Ordinal)
     {
         "information", "info", "details", "contact", "contacts", "address", "addresses", "profile", "resume", "cv",
-        "summary", "personal", "billing", "shipping", "mailing", "account", "customer", "order", "invoice", "receipt",
-        "experience", "education", "skills", "references", "objective", "dear", "hello", "hi", "regards", "thanks",
+        "summary", "personal", "billing", "shipping", "mailing", "delivery", "account", "customer", "order", "invoice",
+        "receipt", "experience", "education", "skills", "references", "objective", "dear", "hello", "hi", "regards",
+        "thanks", "attn", "attention", "recipient", "sender",
         "inc", "llc", "ltd", "corp", "corporation", "company", "co", "group", "gmbh", "plc", "university", "college",
         "school", "bank", "hospital", "foundation", "associates", "partners", "services", "solutions", "technologies",
-        "systems", "street", "avenue", "road", "suite", "apartment"
+        "systems", "street", "avenue", "road", "suite", "apartment",
+        "engineer", "developer", "manager", "director", "designer", "analyst", "consultant", "specialist",
+        "coordinator", "officer", "president", "executive", "administrator", "architect", "scientist", "intern",
+        "founder", "representative", "recruiter", "technician", "supervisor", "programmer", "researcher", "assistant",
+        "associate", "senior", "junior", "principal", "chief", "ceo", "cto", "cfo", "coo", "cio", "vp"
+    };
+
+    // Lines that only announce what follows ("Contact Information", "Resume", or a sign-off above a signature); the
+    // name may be on the next line.
+    private static readonly HashSet<string> Headings = new(StringComparer.Ordinal)
+    {
+        "contact", "contact information", "contact info", "contact details", "contact me", "personal information",
+        "personal info", "personal details", "my details", "your details", "details", "profile", "resume", "cv",
+        "curriculum vitae", "about me", "applicant", "applicant information", "candidate", "candidate information",
+        "customer", "customer information", "customer details", "recipient", "address", "my address",
+        "name and address", "attn", "attention", "to", "from", "sold to", "send to",
+        "regards", "best regards", "kind regards", "warm regards", "best", "best wishes", "all the best", "thanks",
+        "thank you", "many thanks", "cheers", "sincerely", "yours sincerely", "yours truly", "respectfully"
     };
 
     public static Profile Extract(string text, DateTimeOffset now)
@@ -37,35 +55,71 @@ public static partial class LocalExtractor
 
     private static Profile Read(string text, DateTimeOffset now)
     {
+        // Card numbers, SSNs, and IBANs never become values, wherever they sit.
+        var block = LabelLines.Read(Redaction.MaskNumbers(text, " "));
+        var layout = Lay(block);
         var entities = new EntityBuilder();
-        var lines = LabelLines.SplitLines(text);
-        // Lines already read through their label, and lines that must not be read at all.
-        var labeledLines = new HashSet<int>();
-        var offLimits = new HashSet<int>();
-
-        foreach (var line in LabelLines.Find(lines))
+        foreach (var labeled in block.Labeled)
         {
-            if (LabelLines.IsOffLimits(line.Label))
+            var entity = labeled.Mapping.Entity ?? layout.EntityOf[labeled.Line.LineIndex] ?? Person;
+            AddLabeled(entities.For(entity), labeled.Mapping.Key, labeled.Line.Value);
+        }
+        foreach (var section in layout.Sections) ReadSection(section, entities.For(section.Entity));
+        return new Profile(entities.Build(), now);
+    }
+
+    // A run of lines that belong to one entity: the person's own lines, or a block under an address heading. A line's
+    // text is null when it is labeled (its values were read through the label).
+    private sealed record Section(string Entity, List<string?> Lines);
+
+    // The entity each line belongs to (null for the person), and the sections in order.
+    private sealed record Layout(string?[] EntityOf, List<Section> Sections);
+
+    // A heading ("Shipping Address", "Bill to:") starts a block for that address, which ends at the next heading, or at
+    // a blank line once it has content. An inline address label ("Billing address: 123 Main St") takes in only the
+    // unlabeled lines right under it: the rest of that address. Everything else is the person's.
+    private static Layout Lay(LabelLines.Block block)
+    {
+        var entityOf = new string?[block.Free.Count];
+        var sections = new List<Section>();
+        Section? section = null;
+        string? current = null;
+        var inline = false;
+        var hasContent = false;
+        for (var i = 0; i < block.Free.Count; i++)
+        {
+            if (string.IsNullOrWhiteSpace(block.Lines[i]))
             {
-                // "Emergency contact: Sam, 201-555-0199": that phone is not the user's, so the whole line is skipped.
-                offLimits.Add(line.LineIndex);
+                if (current is not null && hasContent) (current, inline, section) = (null, false, null);
                 continue;
             }
-            if (LabelLines.Map(line.Label) is not { } mapping) continue;
-            labeledLines.Add(line.LineIndex);
-            AddLabeled(entities.For(mapping.Entity ?? Person), mapping.Key, line.Value);
+            // A line with an off-limits label is skipped, but it does not end a block.
+            var line = block.Free[i];
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (Heading(line) is { } heading)
+            {
+                current = heading.Entity;
+                inline = block.IsLabeled(i);
+                hasContent = inline || heading.Rest.Length > 0;
+                entityOf[i] = current;
+                section = new Section(current, []);
+                sections.Add(section);
+                // "Ship to: Jordan Rivera": the rest of the line is the block's first line.
+                if (!inline && heading.Rest.Length > 0) section.Lines.Add(heading.Rest);
+                continue;
+            }
+            if (inline && block.IsLabeled(i)) (current, inline, section) = (null, false, null);
+            entityOf[i] = current;
+            var entity = current ?? Person;
+            if (section is null || section.Entity != entity)
+            {
+                section = new Section(entity, []);
+                sections.Add(section);
+            }
+            section.Lines.Add(block.IsLabeled(i) ? null : line);
+            hasContent = true;
         }
-
-        // Everything below reads free text, with off-limits lines blanked (line numbers stay the same).
-        var free = lines.Select((line, index) => offLimits.Contains(index) ? "" : line).ToArray();
-        var person = entities.For(Person);
-        ReadAddress(free, labeledLines, person);
-        if (!person.ContainsKey(FieldKeys.FullName) && !person.ContainsKey(FieldKeys.FirstName) &&
-            NameFromFirstLine(free, labeledLines) is { } name)
-            person[FieldKeys.FullName] = name;
-        AddFastFields(TextHeuristics.Extract(string.Join('\n', free)), entities, person);
-
-        return new Profile(entities.Build(), now);
+        return new Layout(entityOf, sections);
     }
 
     private static void AddLabeled(Dictionary<string, string> fields, string key, string value)
@@ -75,16 +129,21 @@ public static partial class LocalExtractor
         {
             case FieldKeys.Street:
                 // "Address: 123 Main St Apt 4B, Springfield NJ 07081" holds the whole address.
-                if (!ReadAddressValue(value, fields)) fields[key] = value;
+                ReadAddressValue(value, fields);
                 break;
             case FieldKeys.Email:
-                if (EmailRegex().Match(value) is { Success: true } email) fields[key] = email.Value;
+                if (TextHeuristics.FindEmail(value) is { } email) fields[key] = email;
                 break;
             case FieldKeys.Phone:
-                if (value.Count(char.IsAsciiDigit) >= 7) fields[key] = value;
+                if (TextHeuristics.PhoneIn(value) is { } phone) fields[key] = phone;
                 break;
             case FieldKeys.Zip:
+                // A US or Canadian code inside the value, else a short value with a digit ("SW1A 2AA", "75008").
                 if (ZipRegex().Match(value) is { Success: true } zip) fields[key] = zip.Value;
+                else if (value.Length <= 10 && value.Any(char.IsAsciiDigit)) fields[key] = value;
+                break;
+            case FieldKeys.FirstName or FieldKeys.MiddleName or FieldKeys.LastName or FieldKeys.FullName:
+                if (value.Any(char.IsLetter)) fields[key] = value;
                 break;
             default:
                 fields[key] = value;
@@ -92,39 +151,53 @@ public static partial class LocalExtractor
         }
     }
 
-    // Splits one address value into street, unit, city, state, and ZIP. False when it holds no street address.
-    private static bool ReadAddressValue(string value, Dictionary<string, string> fields)
+    // Splits one address value into street, unit, city, state, and ZIP. A value with no street the patterns know is kept
+    // as the street only when it looks like one ("Rose Cottage, Main Road"), never "Same as billing".
+    private static void ReadAddressValue(string value, Dictionary<string, string> fields)
     {
-        if (AddressPatterns.FindStreet(value) is not { } street) return false;
-        fields.TryAdd(FieldKeys.Street, street.Street);
-        if (street.Unit is not null) fields.TryAdd(FieldKeys.Unit, street.Unit);
-        if (AddressPatterns.FindCityStateZip(value, street.Index + street.Length) is { } place) AddPlace(fields, place);
-        return true;
+        var address = AddressPatterns.Read([value]);
+        if (address.Street is { } street)
+        {
+            fields.TryAdd(FieldKeys.Street, street.Street);
+            if (address.Unit is { } unit) fields.TryAdd(FieldKeys.Unit, unit);
+        }
+        else if (address.Place is null && AddressPatterns.IsStreetLike(value))
+        {
+            fields.TryAdd(FieldKeys.Street, value);
+        }
+        if (address.Place is { } place) AddPlace(fields, place);
     }
 
-    // Street, unit, city, state, and ZIP from the unlabeled lines, whether on one line or several.
-    private static void ReadAddress(IReadOnlyList<string> lines, HashSet<int> labeledLines, Dictionary<string, string> fields)
+    // The address, name, email, phone, and links in a section's unlabeled lines, for keys its entity does not have yet.
+    private static void ReadSection(Section section, Dictionary<string, string> fields)
     {
-        var sawStreet = fields.ContainsKey(FieldKeys.Street);
-        for (var i = 0; i < lines.Count; i++)
+        var lines = section.Lines.Select(line => line ?? "").ToArray();
+        var labeledStreet = fields.ContainsKey(FieldKeys.Street);
+        var address = AddressPatterns.Read(lines, labeledStreet);
+        if (!labeledStreet && address.Street is { } street)
         {
-            if (labeledLines.Contains(i)) continue;
-            var line = lines[i];
-            var start = 0;
-            if (!fields.ContainsKey(FieldKeys.Street) && AddressPatterns.FindStreet(line) is { } street)
-            {
-                fields[FieldKeys.Street] = street.Street;
-                if (street.Unit is not null) fields.TryAdd(FieldKeys.Unit, street.Unit);
-                start = street.Index + street.Length;
-                sawStreet = true;
-            }
-            else if (sawStreet && !fields.ContainsKey(FieldKeys.Unit) && AddressPatterns.UnitOnly(line) is { } unit)
-            {
-                fields[FieldKeys.Unit] = unit;
-                continue;
-            }
-            if (!fields.ContainsKey(FieldKeys.City) && AddressPatterns.FindCityStateZip(line, start) is { } place)
-                AddPlace(fields, place);
+            fields[FieldKeys.Street] = street.Street;
+            if (address.Unit is { } unit) fields.TryAdd(FieldKeys.Unit, unit);
+        }
+        else if (labeledStreet && address.Street is null && address.Unit is { } unitLine)
+        {
+            // "Apt 4B" on its own line under a labeled street.
+            fields.TryAdd(FieldKeys.Unit, unitLine);
+        }
+        if (address.Place is { } place) AddPlace(fields, place);
+
+        if (!fields.ContainsKey(FieldKeys.FullName) && !fields.ContainsKey(FieldKeys.FirstName) && SectionName(section) is { } name)
+            fields[FieldKeys.FullName] = name;
+
+        var fast = TextHeuristics.Extract(string.Join('\n', lines));
+        Fill(FieldKeys.Email, fast.Email);
+        Fill(FieldKeys.Phone, fast.Phone);
+        Fill(FieldKeys.Linkedin, fast.Linkedin);
+        if (!string.Equals(fast.Website, fast.Linkedin, StringComparison.OrdinalIgnoreCase)) Fill(FieldKeys.Website, fast.Website);
+
+        void Fill(string key, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value)) fields.TryAdd(key, value);
         }
     }
 
@@ -135,37 +208,69 @@ public static partial class LocalExtractor
         fields.TryAdd(FieldKeys.Zip, place.Zip);
     }
 
-    // A conservative guess: the first line, or its first comma segment, when it is 2 to 4 capitalized words with
-    // no digits that are not a heading, a label, a company, or a street.
-    private static string? NameFromFirstLine(IReadOnlyList<string> lines, HashSet<int> labeledLines)
+    // The name a section starts with: its first line, or the line after a heading such as "Contact Information". When
+    // a labeled line comes first, the labels say what the section holds, so nothing is guessed.
+    private static string? SectionName(Section section)
     {
-        var index = -1;
-        for (var i = 0; i < lines.Count; i++)
-            if (!string.IsNullOrWhiteSpace(lines[i])) { index = i; break; }
-        if (index < 0 || labeledLines.Contains(index)) return null;
+        for (var i = 0; i < section.Lines.Count; i++)
+        {
+            var line = section.Lines[i];
+            if (line is null) return null;
+            if (i == 0 && Headings.Contains(LabelNormalizer.Normalize(line))) continue;
+            return NameFrom(line);
+        }
+        return null;
+    }
 
-        var candidate = lines[index].Split(',')[0].Trim();
+    // A conservative guess: two to four capitalized name words ("Jordan Rivera", "Siobhan J. O'Brien"), with an optional
+    // title ("Dr."), suffix ("Jr."), surname particles ("van der Berg"), and note in brackets ("(they/them)"), that are
+    // not a heading, a job title, a company, a label, or a street. Only the first comma segment is read, so "Martin
+    // Luther King, Jr." gives "Martin Luther King".
+    private static string? NameFrom(string line)
+    {
+        var candidate = ProfileNormalizer.WithoutAsides(line);
+        var comma = candidate.IndexOf(',');
+        if (comma >= 0) candidate = candidate[..comma];
         var words = candidate.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        if (words.Length is < 2 or > 4 || !words.All(w => NameWord().IsMatch(w))) return null;
+        if (words.Length is 0 or > 7) return null;
+        var core = 0;
+        for (var i = 0; i < words.Length; i++)
+        {
+            var word = words[i];
+            if (i == 0 && words.Length > 1 && ProfileNormalizer.IsHonorific(word)) continue;
+            if (i > 0 && i == words.Length - 1 && ProfileNormalizer.IsSuffix(word)) continue;
+            if (i > 0 && i < words.Length - 1 && ProfileNormalizer.IsParticle(word)) continue;
+            if (!NameWord().IsMatch(word)) return null;
+            core++;
+        }
+        if (core is < 2 or > 4) return null;
         var normalized = LabelNormalizer.Normalize(candidate);
-        if (normalized.Split(' ').Any(NotNameWords.Contains)) return null;
+        if (Headings.Contains(normalized) || normalized.Split(' ').Any(NotNameWords.Contains)) return null;
         if (LabelCache.TryGetBuiltIn(normalized, out _) || KeywordRules.Match(normalized) is not null) return null;
         return string.Join(' ', words);
     }
 
-    // Email, phone, ZIP, and links found anywhere, for keys the block has not filled yet.
-    private static void AddFastFields(FastFields fast, EntityBuilder entities, Dictionary<string, string> person)
-    {
-        Fill(FieldKeys.Email, fast.Email);
-        Fill(FieldKeys.Phone, fast.Phone);
-        Fill(FieldKeys.Zip, fast.Zip);
-        Fill(FieldKeys.Linkedin, fast.Linkedin);
-        if (!string.Equals(fast.Website, fast.Linkedin, StringComparison.OrdinalIgnoreCase)) Fill(FieldKeys.Website, fast.Website);
+    private sealed record HeadingLine(string Entity, string Rest);
 
-        void Fill(string key, string? value)
+    // "Shipping Address", "Billing Information:", "Ship to: Jordan Rivera", "Home address": a line that starts the block
+    // for one address. Only "... to" and "... address" headings may carry the block's first line after a colon, so
+    // "Shipping: Free" is not one.
+    private static HeadingLine? Heading(string line)
+    {
+        var match = HeadingRegex().Match(line);
+        if (!match.Success) return null;
+        var rest = match.Groups["rest"].Value;
+        var noun = match.Groups["noun"].Value.ToLowerInvariant().TrimEnd('.');
+        if (rest.Length > 0 && noun is not ("address" or "addr" or "to")) return null;
+        var entity = match.Groups["kind"].Value.ToLowerInvariant() switch
         {
-            if (!string.IsNullOrWhiteSpace(value) && !entities.Has(key)) person[key] = value;
-        }
+            "shipping" or "ship" or "delivery" or "deliver" => "shipping address",
+            "billing" or "bill" => "billing address",
+            "mailing" => "mailing address",
+            "home" => "home",
+            _ => "work"
+        };
+        return new HeadingLine(entity, rest);
     }
 
     // Entities in first-seen order, the person first.
@@ -182,8 +287,6 @@ public static partial class LocalExtractor
             return created;
         }
 
-        public bool Has(string key) => _entities.Any(e => e.Fields.ContainsKey(key));
-
         public IReadOnlyList<Entity> Build() => _entities
             .Select(e => ProfileNormalizer.Normalize(new Entity(e.Label, e.Fields)))
             .Where(e => e.Fields.Count > 0)
@@ -195,9 +298,13 @@ public static partial class LocalExtractor
     [GeneratedRegex(@"^(?:\p{Lu}\p{Ll}*(?:['’-]\p{Lu}?\p{Ll}+|\p{Lu}\p{Ll}+)*|\p{Lu}\.)$", RegexOptions.CultureInvariant, 200)]
     private static partial Regex NameWord();
 
-    [GeneratedRegex(@"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 200)]
-    private static partial Regex EmailRegex();
-
     [GeneratedRegex(@"\b\d{5}(?:-\d{4})?\b|\b[A-Za-z]\d[A-Za-z] ?\d[A-Za-z]\d\b", RegexOptions.CultureInvariant, 200)]
     private static partial Regex ZipRegex();
+
+    [GeneratedRegex(
+        @"^[ \t]*(?:(?<kind>shipping|billing|mailing|delivery)(?:[ \t]+(?<noun>address|addr\.?|information|info|details))?" +
+        @"|(?<kind>home|work|office)[ \t]+(?<noun>address)|(?<kind>ship|bill|deliver)[ \t]+(?<noun>to))" +
+        @"[ \t]*(?:[:：][ \t]*(?<rest>\S(?:.*\S)?)?)?[ \t]*$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, 200)]
+    private static partial Regex HeadingRegex();
 }

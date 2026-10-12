@@ -37,9 +37,8 @@ public static partial class TextHeuristics
     {
         ArgumentNullException.ThrowIfNull(text);
         var lines = LabelLines.SplitLines(text);
-        var email = EmailRegex().Match(text);
         return new FastFields(
-            email.Success ? email.Value : null,
+            FindEmail(text),
             FindPhone(lines),
             AddressPatterns.Read(lines).Place?.Zip,
             FindLink(LinkRegex(), text),
@@ -108,6 +107,13 @@ public static partial class TextHeuristics
         if (written.Success) return written.Value;
         var bare = BarePhoneRegex().Match(value);
         return bare.Success ? bare.Value : null;
+    }
+
+    // The first email address in the text.
+    internal static string? FindEmail(string text)
+    {
+        var match = EmailRegex().Match(text);
+        return match.Success ? match.Value : null;
     }
 
     // True when the whole value is a phone number written like one.
