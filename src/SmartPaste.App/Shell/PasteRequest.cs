@@ -1,7 +1,8 @@
 namespace SmartPaste.App.Shell;
 
-// A Ctrl+V the keyboard hook turned into a smart paste. Every key typed after it is held back until Complete is
-// called, then replayed in order. The owner must always complete it, whatever the outcome.
+// A Ctrl+V the keyboard hook turned into a smart paste, or a hold for the picker shortcut (KeyboardHook.HoldKeysAsync).
+// Every key typed after it is held back until Complete is called, then replayed in order. The owner must always
+// complete it, whatever the outcome.
 internal sealed class PasteRequest
 {
     private readonly Action<PasteRequest> _onComplete;

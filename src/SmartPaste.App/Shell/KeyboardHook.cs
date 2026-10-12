@@ -14,9 +14,9 @@ namespace SmartPaste.App.Shell;
 // The decisions live in InputQueue. This class adapts it to Win32: it installs the hooks, feeds events in, performs
 // injections after the hook callback has returned, keeps time, and hands requests and captured keys to the UI thread.
 //
-// Threads: Start, Stop, Capture, and Dispose may be called from any thread (normally the UI thread). PasteRequested
-// and every IKeySink callback except Accepts run on the UI thread. InterceptFilter and IKeySink.Accepts run on the
-// hook thread inside the hook callback, so they must be fast and thread-safe.
+// Threads: Start, Stop, Capture, HoldKeysAsync, and Dispose may be called from any thread (normally the UI thread).
+// PasteRequested and every IKeySink callback except Accepts run on the UI thread. InterceptFilter and IKeySink.Accepts
+// run on the hook thread inside the hook callback, so they must be fast and thread-safe.
 internal sealed class KeyboardHook : IKeyCapture, IDisposable
 {
     // WM_APP + 0x53: commands are waiting in the queue.
@@ -29,6 +29,9 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
     private readonly NativeMethods.LowLevelHookProc _keyboardCallback;
     private readonly NativeMethods.LowLevelHookProc _mouseCallback;
     private readonly ConcurrentQueue<Action> _commands = new();
+    // Holds asked for by HoldKeysAsync, served by the hook thread. Kept apart from _commands, which a new hook session
+    // discards: every hold must get an answer, or its caller would wait forever.
+    private readonly ConcurrentQueue<TaskCompletionSource<PasteRequest?>> _holds = new();
     private readonly object _lifecycle = new();
 
     // Hook thread only.
@@ -121,6 +124,29 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
         if (!thread.Join(StopTimeout)) Log.Event("hook_stop_timeout");
     }
 
+    // For the picker shortcut, which Windows delivers as a hot key, not through the hook: starts a request without a
+    // key, so every key typed from now on is held exactly as after a Ctrl+V, until the returned request is completed
+    // (or its safety timeout runs out). Null when the hook is not running or another paste is still in flight; keys
+    // are not held then. Any thread.
+    public Task<PasteRequest?> HoldKeysAsync()
+    {
+        var hold = new TaskCompletionSource<PasteRequest?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        lock (_lifecycle)
+        {
+            // Queued under the lock that Stop takes too: a hold is either served (or answered null) by the running
+            // hook session, or refused here. It can never wait for a later session, which would hold keys for a
+            // shortcut long gone.
+            if (_thread is null)
+            {
+                hold.TrySetResult(null);
+                return hold.Task;
+            }
+            _holds.Enqueue(hold);
+        }
+        NativeMethods.PostThreadMessage(Volatile.Read(ref _threadId), WakeMessage, IntPtr.Zero, IntPtr.Zero);
+        return hold.Task;
+    }
+
     public IDisposable Capture(IKeySink sink)
     {
         ArgumentNullException.ThrowIfNull(sink);
@@ -178,6 +204,7 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
         {
             Log.Event("hook_install_error", ("status", Marshal.GetLastPInvokeError()));
             _queue = null;
+            AnswerHolds(null);
             started.TrySetResult(false);
             return;
         }
@@ -217,9 +244,18 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
             }
 
             while (_commands.TryDequeue(out var command)) command();
+            AnswerHolds(queue);
             queue.Tick(Now);
             InjectPending(queue);
         }
+    }
+
+    // Answers every hold asked for so far: started while the queue allows it, or null when it can't (another request
+    // in flight) or when queue is null because this hook session is ending.
+    private void AnswerHolds(InputQueue? queue)
+    {
+        while (_holds.TryDequeue(out var hold))
+            hold.TrySetResult(queue?.StartHold(Now) is { } sequence ? Track(sequence) : null);
     }
 
     private static uint WaitMilliseconds(InputQueue queue)
@@ -242,6 +278,7 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
 
     private void Shutdown(InputQueue queue)
     {
+        AnswerHolds(null);
         var held = queue.Shutdown();
         RemoveMouseHook();
         if (_keyboardHook != IntPtr.Zero)
@@ -318,12 +355,19 @@ internal sealed class KeyboardHook : IKeyCapture, IDisposable
     // Hook thread, possibly inside the callback: create the request and hand it to the UI thread.
     private void Raise(int sequence)
     {
+        var request = Track(sequence);
+        _dispatcher.BeginInvoke(() => DeliverRequest(request));
+    }
+
+    // Hook thread: the request object for a request the queue started, tracked so the queue can expire it.
+    private PasteRequest Track(int sequence)
+    {
         Volatile.Write(ref _lastSequence, sequence);
         var window = NativeMethods.GetForegroundWindow();
         NativeMethods.GetWindowThreadProcessId(window, out var processId);
         var request = new PasteRequest(window, processId, sequence, Stopwatch.GetTimestamp(), CompleteFromAnyThread);
         _requests[sequence] = request;
-        _dispatcher.BeginInvoke(() => DeliverRequest(request));
+        return request;
     }
 
     // UI thread.

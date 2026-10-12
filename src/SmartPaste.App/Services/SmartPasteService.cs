@@ -15,7 +15,8 @@ namespace SmartPaste.App.Services;
 internal sealed class SmartPasteService : IDisposable
 {
     private static readonly TimeSpan InspectBudget = TimeSpan.FromMilliseconds(600);
-    private static readonly TimeSpan RecheckBudget = TimeSpan.FromMilliseconds(400);
+    // The recheck is one round trip, but it may wait in line behind an ask-ahead inspection.
+    private static readonly TimeSpan RecheckBudget = TimeSpan.FromMilliseconds(600);
     private static readonly TimeSpan WorkingDelay = TimeSpan.FromMilliseconds(250);
 
     private readonly KeyboardHook _hook;
@@ -70,8 +71,7 @@ internal sealed class SmartPasteService : IDisposable
         var target = new PasteTarget(request.ForegroundWindow, request.WindowProcessId, request.WindowProcessId);
         var anchor = CursorAnchor();
         var record = new PasteRecord();
-        // Nothing may reach the target once the hook has given the held keys back: it would land after them.
-        Func<bool> stillWanted = () => !request.IsExpired;
+        var stillWanted = StillWanted(request);
         DispatcherTimer? working = null;
         try
         {
@@ -155,9 +155,16 @@ internal sealed class SmartPasteService : IDisposable
         _picking = true;
         var clock = Stopwatch.StartNew();
         var record = new PasteRecord { Source = "user", Reason = "shortcut" };
+        PasteRequest? hold = null;
         try
         {
-            var field = await _focus.InspectAsync(InspectBudget, CancellationToken.None);
+            // Windows delivers the shortcut as a hot key, so unlike after Ctrl+V nothing holds the keys typed next: a
+            // Tab typed right after choosing would move the focus before the value lands. From here on keys wait for
+            // the pick to be pasted, as after a Ctrl+V. Null when they can't be held (another paste is in flight).
+            hold = await _hook.HoldKeysAsync();
+            var ct = hold?.Expired ?? CancellationToken.None;
+            var stillWanted = StillWanted(hold);
+            var field = await _focus.InspectAsync(InspectBudget, ct);
             var anchor = field is null ? CaretLocator.Locate(window, null) : CaretLocator.Locate(window, field.Bounds);
             record.Label = field?.Context.BestLabel() ?? "";
             record.App = field?.Context.AppName;
@@ -169,10 +176,15 @@ internal sealed class SmartPasteService : IDisposable
             }
 
             var candidates = FieldDecider.AllCandidates(armed.Profile, field?.Context);
-            var picked = await _feedback.PickAsync(new PickRequest(candidates, PickMode.AllValues, anchor, field?.Context.BestLabel()), CancellationToken.None);
+            var picked = await _feedback.PickAsync(new PickRequest(candidates, PickMode.AllValues, anchor, field?.Context.BestLabel()), ct);
             var target = new PasteTarget(window, processId, field?.ProcessId ?? processId);
-            await ApplyPickAsync(picked, field, field?.Context, armed.Profile, target, record, PickMode.AllValues, CancellationToken.None, stillWanted: null);
+            await ApplyPickAsync(picked, field, field?.Context, armed.Profile, target, record, PickMode.AllValues, ct, stillWanted);
             ConfirmPaste(record, anchor);
+        }
+        catch (OperationCanceledException) when (hold?.IsExpired == true)
+        {
+            // The safety timeout already gave the keyboard back: pasting now would land out of order.
+            record.Reason = "expired";
         }
         catch (Exception ex)
         {
@@ -180,10 +192,17 @@ internal sealed class SmartPasteService : IDisposable
         }
         finally
         {
+            // After the paste, and so after the user's clipboard is back.
+            hold?.Complete();
             _picking = false;
             Finish(record, clock);
         }
     }
+
+    // Nothing may reach the target once the hook has given the held keys back: it would land after them. Null (no
+    // check) when no keys are held.
+    private static Func<bool>? StillWanted(PasteRequest? request) =>
+        request is { } held ? () => !held.IsExpired : null;
 
     private async Task ApplyPickAsync(PickResult picked, FocusedField? field, FieldContext? context, Profile profile,
         PasteTarget target, PasteRecord record, PickMode mode, CancellationToken ct, Func<bool>? stillWanted)
@@ -214,9 +233,9 @@ internal sealed class SmartPasteService : IDisposable
     private async Task PasteValueAsync(string value, FocusedField? field, PasteTarget target, PasteRecord record,
         CancellationToken ct, Func<bool>? stillWanted)
     {
-        if (field is not null && !await FocusUnchangedAsync(field, ct))
+        if (field is not null && await FocusMovedAsync(field, ct) is { } reason)
         {
-            record.Reason = "focus_moved";
+            record.Reason = reason;
             record.Outcome = ActivityOutcome.Skipped;
             return;
         }
@@ -226,10 +245,13 @@ internal sealed class SmartPasteService : IDisposable
         record.Outcome = record.Pasted ? ActivityOutcome.Pasted : ActivityOutcome.Skipped;
     }
 
-    private async Task<bool> FocusUnchangedAsync(FocusedField field, CancellationToken ct)
+    // Null while focus is still on the field; otherwise why the value must not be pasted: focus_moved, or focus_unknown
+    // when UI Automation could not say in time (pasting blind could land in another field).
+    private async Task<string?> FocusMovedAsync(FocusedField field, CancellationToken ct)
     {
-        var now = await _focus.InspectAsync(RecheckBudget, ct);
-        return now is not null && now.RuntimeId.AsSpan().SequenceEqual(field.RuntimeId);
+        var now = await _focus.FocusedRuntimeIdAsync(RecheckBudget, ct);
+        if (now is null) return "focus_unknown";
+        return now.AsSpan().SequenceEqual(field.RuntimeId) ? null : "focus_moved";
     }
 
     private void ConfirmPaste(PasteRecord record, ScreenRect anchor)

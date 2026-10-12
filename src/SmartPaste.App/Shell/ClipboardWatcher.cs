@@ -32,13 +32,18 @@ internal sealed class ClipboardWatcher : IDisposable
 
     public bool IsListening => _listening;
 
+    // Apps whose copies are never read, by executable name ("mstsc.exe"): asked with the clipboard open, before any
+    // content is read. Null reads every app's copies (private ones and password managers' are always skipped).
+    public Func<string, bool>? IsSkippedOwner { get; set; }
+
     // A new copy from another app, raised before anything else happens (it disarms the previous block).
     public event Action? Changed;
 
-    // Copied text and the owner's executable name (when known). Not raised for private copies.
-    public event Action<string, string?>? TextCopied;
+    // Copied text. Not raised for private copies, or for copies made in a skipped app.
+    public event Action<string>? TextCopied;
 
-    // A copied screenshot as PNG, at most 2000 px on its longest side. Only while ReadScreenshots is on.
+    // A copied screenshot as PNG, at most 2000 px on its longest side. Only while ReadScreenshots is on, and, like
+    // text, never for private copies or copies made in a skipped app.
     public event Action<byte[]>? ImageCopied;
 
     public void Start()
@@ -127,6 +132,11 @@ internal sealed class ClipboardWatcher : IDisposable
             uint ownerProcessId = 0;
             if (owner != IntPtr.Zero) NativeMethods.GetWindowThreadProcessId(owner, out ownerProcessId);
             ownerName = ProcessInfo.TryGetName(ownerProcessId);
+            if (ownerName is not null && IsSkippedOwner?.Invoke(ownerName) == true)
+            {
+                Log.Event("copy_skipped", ("reason", "excluded_app"));
+                return;
+            }
 
             var formats = ClipboardAccess.EnumerateFormats();
             var names = formats.Where(format => format.Name is not null).Select(format => format.Name!).ToList();
@@ -146,7 +156,7 @@ internal sealed class ClipboardWatcher : IDisposable
 
         if (text is not null)
         {
-            if (!string.IsNullOrWhiteSpace(text)) TextCopied?.Invoke(text, ownerName);
+            if (!string.IsNullOrWhiteSpace(text)) TextCopied?.Invoke(text);
             return;
         }
         if (image is { } found) _ = ConvertAndRaiseAsync(found.Bytes, found.IsPng, sequence);

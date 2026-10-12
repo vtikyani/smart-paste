@@ -706,6 +706,104 @@ public sealed class InputQueueTests
         Assert.Equal("+a", h.AppView);
     }
 
+    // ---- Holds (the picker shortcut, which arrives as a hot key, not through the hook) ----
+
+    [Fact]
+    public void AHoldKeepsKeysUntilItIsCompleted()
+    {
+        var h = new InputQueueHarness();
+        Assert.Equal(1, h.Queue.StartHold(h.Now));
+        // Nobody is asked to decide a paste: the shortcut's own code owns the hold.
+        Assert.Empty(h.Host.Raised);
+        Assert.True(h.Press(Tab));
+        Assert.True(h.Release(Tab));
+        h.Tap(A);
+        Assert.Empty(h.AppView);
+
+        h.Complete(1);
+        Assert.Equal("+tab -tab +a -a", h.Host.InjectedView(0));
+        h.Echo();
+        Assert.Equal("+tab -tab +a -a", h.AppView);
+        Assert.True(h.Queue.IsIdle);
+    }
+
+    [Fact]
+    public void AKeyTypedRightAfterAPickWaitsForThePaste()
+    {
+        // Win+Alt+V, "2" picks a row, and Tab follows at once. The picker refuses the Tab (it has closed), and the Tab
+        // must not move the focus before the value lands.
+        const ushort Two = 0x32;
+        var h = new InputQueueHarness();
+        var picked = false;
+        h.Capture = new Sink(stroke => !picked && (picked = stroke.VirtualKey == Two));
+        h.Queue.SetCaptureActive(true, h.Now);
+        Assert.Equal(1, h.Queue.StartHold(h.Now));
+
+        Assert.True(h.Press(Two));
+        Assert.True(h.Release(Two));
+        Assert.True(h.Press(Tab));
+        Assert.True(h.Release(Tab));
+        Assert.Equal(1, h.Host.OtherKeys);
+        Assert.Empty(h.AppView);
+
+        h.Capture = null;
+        h.Queue.SetCaptureActive(false, h.Now);
+        h.Paste();
+        h.Complete(1);
+        h.EchoAll();
+        Assert.Equal("PASTE +tab -tab", h.AppView);
+    }
+
+    [Fact]
+    public void NoHoldWhileAPasteIsInFlight()
+    {
+        var h = StartRequest();
+        Assert.Null(h.Queue.StartHold(h.Now));
+        h.Tap(A);
+        h.Complete(1);
+        // Replaying the key typed during the paste: still busy.
+        Assert.Null(h.Queue.StartHold(h.Now));
+
+        h.EchoAll();
+        Assert.True(h.Queue.IsIdle);
+        Assert.Equal(2, h.Queue.StartHold(h.Now));
+    }
+
+    [Fact]
+    public void AHoldTimesOutLikeAPasteButNeverWhileThePickerIsOpen()
+    {
+        var h = new InputQueueHarness();
+        Assert.Equal(1, h.Queue.StartHold(h.Now));
+        h.Tap(A);
+        h.Advance(1000);
+        h.Queue.SetCaptureActive(true, h.Now);
+        h.Advance(60_000);
+        Assert.Empty(h.Host.Expired);
+
+        h.Queue.SetCaptureActive(false, h.Now);
+        h.Advance(2999);
+        Assert.Empty(h.Host.Expired);
+        h.Advance(1);
+        Assert.Equal(new[] { (1, "timeout") }, h.Host.Expired);
+        Assert.Equal("+a -a", h.Host.InjectedView(0));
+    }
+
+    [Fact]
+    public void ACtrlVTypedDuringAHoldBecomesTheNextPaste()
+    {
+        var h = new InputQueueHarness();
+        Assert.Equal(1, h.Queue.StartHold(h.Now));
+        h.Tap(Tab);
+        h.Press(Ctrl);
+        Assert.True(h.Press(V));
+        Assert.Empty(h.Host.Raised);
+
+        h.Complete(1);
+        h.Echo();
+        h.Advance(100);
+        Assert.Equal(new[] { 2 }, h.Host.Raised);
+    }
+
     // ---- Key state the hook missed ----
 
     [Fact]

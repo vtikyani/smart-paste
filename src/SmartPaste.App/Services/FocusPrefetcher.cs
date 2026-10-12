@@ -84,36 +84,41 @@ internal sealed class FocusPrefetcher : IDisposable
         }
     }
 
-    // Paste time: the answer asked ahead for this field when there is one, else a fresh decision. Also returns the
-    // field as decided (with an OCR label when it had none), which the picker learns from.
+    // Paste time: the answer asked ahead for this field when Jev gave it, else a fresh decision. Also returns the field
+    // as decided (with an OCR label when it had none), which the picker learns from.
     public async Task<(Decision Decision, FieldContext Context)> DecideForPasteAsync(FocusedField field, Profile profile, CancellationToken ct)
     {
-        if (_ahead.TryGetValue(Key(field), out var ahead) && ReferenceEquals(ahead.Profile, profile) && ahead.UsedJev)
+        FieldContext? asked = null;
+        if (_ahead.TryGetValue(Key(field), out var ahead) && ReferenceEquals(ahead.Profile, profile))
         {
             try
             {
                 var decided = await ahead.Decision.WaitAsync(FieldDecider.PasteDeadline, ct);
-                // An answer made while Jev could not be reached came from the local list: ask again now.
-                if (decided.Decision.JevFailure is null)
+                if (ahead.UsedJev && decided.Decision.JevFailure is null)
                 {
                     Log.Event("ask_ahead_used", ("source", decided.Decision.Source));
                     return decided;
                 }
+                // The local list decided (Jev was off for asking ahead, or could not be reached): ask Jev now, about the
+                // field as it was read before its hint went up. Reading its label off the screen again could read the
+                // hint chip above the field as the label.
+                asked = decided.Context;
             }
-            catch (TimeoutException)
+            catch (TimeoutException) when (ahead.UsedJev)
             {
-                // Jev is still thinking about this field: the paste must not wait longer, so decide locally.
+                // Jev is still thinking about this field: the paste must not wait longer, so decide locally. No hint
+                // is up yet: it shows only once the answer is in.
                 var context = (await WithLabelAsync(field, ct)).Context;
                 return (await _decisions.DecideAsync(context, profile, FieldDecider.PasteDeadline, ct, allowJev: false), context);
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
             {
-                // The earlier attempt failed; decide afresh below.
+                // The earlier attempt failed or is still running; decide afresh below.
             }
         }
 
-        var labeled = await WithLabelAsync(field, ct);
-        return (await _decisions.DecideAsync(labeled.Context, profile, FieldDecider.PasteDeadline, ct), labeled.Context);
+        var labeled = asked ?? (await WithLabelAsync(field, ct)).Context;
+        return (await _decisions.DecideAsync(labeled, profile, FieldDecider.PasteDeadline, ct), labeled);
     }
 
     private void OnFocusChanged(FocusedField? field)

@@ -68,6 +68,7 @@ internal sealed class FocusInspector : IDisposable
     private IUIAutomation? _automation;
     private IUIAutomationCacheRequest? _fieldCache;
     private IUIAutomationCacheRequest? _nodeCache;
+    private IUIAutomationCacheRequest? _idCache;
     private IUIAutomationTreeWalker? _walker;
     private FocusHandler? _focusHandler;
     private int[]? _lastReported;
@@ -92,10 +93,28 @@ internal sealed class FocusInspector : IDisposable
 
     // The focused element when it is an editable single-value field (a text box or an editable combo box); null for
     // anything else, for our own windows, or when the budget runs out.
-    public async Task<FocusedField?> InspectAsync(TimeSpan budget, CancellationToken ct)
+    public Task<FocusedField?> InspectAsync(TimeSpan budget, CancellationToken ct) =>
+        RunAsync(budget, ct, "uia_inspect", InspectFocused);
+
+    // The runtime id of whatever has the focus now, in one round trip: enough to tell whether focus is still on the
+    // field an inspection found, without describing it all over again (which can take most of a second in a big page).
+    // Null when nothing has the focus, or when the budget runs out.
+    public Task<int[]?> FocusedRuntimeIdAsync(TimeSpan budget, CancellationToken ct) =>
+        RunAsync(budget, ct, "uia_focus_check", _ =>
+        {
+            var automation = Automation();
+            var focused = automation.GetFocusedElementBuildCache(_idCache);
+            return focused?.GetCachedPropertyValue(UIA_PropertyIds.UIA_RuntimeIdPropertyId) as int[];
+        });
+
+    // Runs work on the UIA thread with the deadline it should keep, and waits at most budget for its answer. Null when
+    // the work fails, the budget runs out, or the inspector is disposed; eventName_error and eventName_timeout are
+    // logged for the first two.
+    private async Task<T?> RunAsync<T>(TimeSpan budget, CancellationToken ct, string eventName, Func<long, T?> work)
+        where T : class
     {
         ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(budget, TimeSpan.Zero);
-        var result = new TaskCompletionSource<FocusedField?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var result = new TaskCompletionSource<T?>(TaskCreationOptions.RunContinuationsAsynchronously);
         var deadline = Now + (long)budget.TotalMilliseconds;
         var queued = Enqueue(() =>
         {
@@ -103,11 +122,11 @@ internal sealed class FocusInspector : IDisposable
             if (result.Task.IsCompleted) return;
             try
             {
-                result.TrySetResult(InspectFocused(deadline));
+                result.TrySetResult(work(deadline));
             }
             catch (Exception ex) when (IsUiaFailure(ex))
             {
-                Log.Error("uia_inspect_error", ex);
+                Log.Error(eventName + "_error", ex);
                 result.TrySetResult(null);
             }
         });
@@ -120,7 +139,7 @@ internal sealed class FocusInspector : IDisposable
         catch (TimeoutException)
         {
             result.TrySetResult(null);
-            Log.Event("uia_inspect_timeout", ("ms", (long)budget.TotalMilliseconds));
+            Log.Event(eventName + "_timeout", ("ms", (long)budget.TotalMilliseconds));
             return null;
         }
         catch (OperationCanceledException)
@@ -208,6 +227,8 @@ internal sealed class FocusInspector : IDisposable
         foreach (var property in FieldProperties) _fieldCache.AddProperty(property);
         _nodeCache = automation.CreateCacheRequest();
         foreach (var property in NodeProperties) _nodeCache.AddProperty(property);
+        _idCache = automation.CreateCacheRequest();
+        _idCache.AddProperty(UIA_PropertyIds.UIA_RuntimeIdPropertyId);
         _walker = automation.ControlViewWalker;
         _automation = automation;
         return automation;

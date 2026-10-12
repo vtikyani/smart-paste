@@ -45,6 +45,9 @@ internal sealed class CopyPipeline : IDisposable
         _ocr = ocr;
         _dispatcher = dispatcher;
         _guard = new ServiceGuard(HasKey ? ServiceStatus.Ready : ServiceStatus.NotConfigured);
+        // Copies made in apps Smart Paste never touches (Remote Desktop, Hyper-V, password managers, and the apps the
+        // user excluded) are never read, text or screenshot: the watcher asks before reading anything.
+        watcher.IsSkippedOwner = IsSkippedApp;
         watcher.Changed += OnChanged;
         watcher.TextCopied += OnTextCopied;
         watcher.ImageCopied += OnImageCopied;
@@ -61,18 +64,9 @@ internal sealed class CopyPipeline : IDisposable
         _state.IsParsing = false;
     }
 
-    private void OnTextCopied(string text, string? ownerExe)
-    {
-        // Copies made in apps Smart Paste never touches (Remote Desktop, Hyper-V, password managers, and the apps the
-        // user excluded) are never read.
-        if (ownerExe is not null && IsSkippedApp(ownerExe))
-        {
-            Log.Event("copy_skipped", ("reason", "excluded_app"));
-            return;
-        }
-        _ = HandleAsync(text, ProfileOrigin.CopiedText, _generation, _token);
-    }
+    private void OnTextCopied(string text) => _ = HandleAsync(text, ProfileOrigin.CopiedText, _generation, _token);
 
+    // UI thread, asked by the watcher with the clipboard open.
     private bool IsSkippedApp(string exe) =>
         InterceptGate.BuiltInBlockedApps.Contains(exe, StringComparer.OrdinalIgnoreCase) ||
         _settings.Current.ExcludedApps.Contains(exe, StringComparer.OrdinalIgnoreCase);
@@ -176,6 +170,7 @@ internal sealed class CopyPipeline : IDisposable
 
     public void Dispose()
     {
+        _watcher.IsSkippedOwner = null;
         _watcher.Changed -= OnChanged;
         _watcher.TextCopied -= OnTextCopied;
         _watcher.ImageCopied -= OnImageCopied;

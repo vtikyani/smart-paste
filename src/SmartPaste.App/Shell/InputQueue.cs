@@ -180,6 +180,12 @@ internal sealed class InputQueue
         if (_phase == Phase.Draining && fence == _fence) Advance(now);
     }
 
+    // A request that no key started: the picker shortcut, which Windows delivers as a hot key rather than through the
+    // hook. From now until it is completed, keys are held exactly as after a Ctrl+V, so a key typed right after
+    // choosing can't reach the app before the value. Returns its number, or null while another request or a replay is
+    // in flight (keys are then not held for it).
+    public int? StartHold(long now) => _phase == Phase.Idle ? Begin(now) : null;
+
     // The owner of a request is done with it: the keys typed meanwhile can go.
     public void Complete(int sequence, long now)
     {
@@ -304,11 +310,13 @@ internal sealed class InputQueue
         return true;
     }
 
-    private void Start(long now)
+    private void Start(long now) => _host.RaiseRequest(Begin(now));
+
+    private int Begin(long now)
     {
         _active = new Request(++_lastSequence, now, paused: _captureActive);
         _phase = Phase.Pending;
-        _host.RaiseRequest(_active.Sequence);
+        return _active.Sequence;
     }
 
     private void Expire(long now, string reason)
