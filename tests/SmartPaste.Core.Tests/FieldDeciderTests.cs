@@ -62,15 +62,15 @@ public class FieldDeciderTests
         var question = jev.LastQuestion!;
         Assert.Equal("Street address", (string?)question.State["label"]);
         Assert.Equal("Shipping address", (string?)question.State["sections"]![0]);
-        Assert.Equal(["street.billing_address", "street.shipping_address", "none"], question.Options.Select(o => o.Name));
-        Assert.Equal("2 Oak Ave", (string?)question.Options[1].Description["value"]);
+        Assert.Equal(["street__billing_address", "street__shipping_address", "none"], question.Options.Select(o => o.Name));
+        Assert.StartsWith("Street (shipping address): 2 Oak Ave", question.Options[1].DescriptionText);
         Assert.Equal(FieldDecider.PasteDeadline, jev.LastDeadline);
     }
 
     [Fact]
     public async Task JevPicksBetweenBillingAndShipping()
     {
-        var jev = new FakeJev(_ => Pick("street.shipping_address", 0.92));
+        var jev = new FakeJev(_ => Pick("street__shipping_address", 0.92));
         var decision = await new FieldDecider(LabelCache.Empty(), jev).DecideAsync(Field("Street"), Addresses, CancellationToken.None);
         Assert.Equal("2 Oak Ave", decision.Value);
         Assert.Equal(new Candidate(FieldKeys.Street, "shipping address", "2 Oak Ave"), Assert.Single(decision.Candidates));

@@ -63,15 +63,40 @@ public class JevResponseTests
     [InlineData("[]")]
     [InlineData("{}")]
     [InlineData("{\"answers\":{}}")]
+    [InlineData("{\"answers\":[]}")]
     [InlineData("{\"answers\":{\"a\":{\"choice\":\"x\",\"confidence\":1},\"b\":{\"choice\":\"y\",\"confidence\":1}}}")]
     [InlineData("{\"answers\":{\"field_value\":{\"confidence\":0.9}}}")]
     [InlineData("{\"answers\":{\"field_value\":{\"choice\":\"zip\"}}}")]
+    [InlineData("{\"answers\":{\"field_value\":{\"choice\":\"  \",\"confidence\":0.9}}}")]
     [InlineData("{\"error\":{\"code\":400,\"message\":\"bad\"}}")]
+    [InlineData("{\"error\":{\"message\":\"bad\"}}")]
     public void UnusableBodiesAreBadResponses(string json)
     {
         var error = Assert.Throws<ServiceException>(() => JevClient.ParseResponse(json, JevEndpoint.TypeSafe));
         Assert.Equal(ServiceFailure.BadResponse, error.Failure);
         Assert.DoesNotContain("bad", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("{\"error\":{\"code\":402,\"message\":\"Insufficient credits\"}}", ServiceFailure.PaymentRequired)]
+    [InlineData("{\"error\":{\"code\":401,\"message\":\"Missing key\"}}", ServiceFailure.Unauthorized)]
+    [InlineData("{\"error\":{\"code\":403,\"message\":\"Not allowed\"}}", ServiceFailure.Unauthorized)]
+    [InlineData("{\"error\":{\"code\":429,\"message\":\"Too many\"}}", ServiceFailure.RateLimited)]
+    [InlineData("{\"error\":{\"code\":\"402\"}}", ServiceFailure.PaymentRequired)]
+    public void ErrorEnvelopeSentAsASuccessIsTheFailureItNames(string json, ServiceFailure expected)
+    {
+        var error = Assert.Throws<ServiceException>(() => JevClient.ParseResponse(json, JevEndpoint.OpenRouter));
+        Assert.Equal(expected, error.Failure);
+    }
+
+    [Fact]
+    public void ChoiceAndProbabilitiesMapBackToTheOptionsSent()
+    {
+        const string json = "{\"answers\":{\"field_value\":{\"choice\":\"Street__Shipping_Address\",\"confidence\":0.9,\"probabilities\":{\"STREET__SHIPPING_ADDRESS\":0.9,\"street__billing_address\":0.1}}}}";
+        var result = JevClient.ParseResponse(json, JevEndpoint.TypeSafe, ["street__billing_address", "street__shipping_address", "none"]);
+        Assert.Equal("street__shipping_address", result.Choice);
+        Assert.Equal(0.9, result.Probabilities["street__shipping_address"]);
+        Assert.Equal(0.1, result.Probabilities["street__billing_address"]);
     }
 
     [Fact]

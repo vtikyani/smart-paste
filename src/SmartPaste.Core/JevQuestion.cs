@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json.Nodes;
 
@@ -7,6 +8,11 @@ namespace SmartPaste.Core;
 public sealed record JevOption(string Name, JsonNode Description, Candidate? Candidate)
 {
     public bool IsNone => Candidate is null;
+
+    // The description as the plain string sent to Jev. A string is the one criteria shape every route documents, so
+    // any other node is sent as its JSON text.
+    public string DescriptionText =>
+        Description is JsonValue value && value.TryGetValue<string>(out var text) ? text : Description.ToJsonString();
 }
 
 // What Jev is asked about one field: the field as state, plain instructions, and one option per distinct value of
@@ -21,12 +27,17 @@ public sealed class JevQuestion
     // Values are trimmed before they leave the PC: enough for Jev to tell them apart, no more.
     public const int ValueLimit = 60;
 
+    // Option names stay short: the key part, and the entity part for a key with several values.
+    private const int KeyNameLimit = 40;
+    private const int EntityNameLimit = 24;
+    private const int NameLimit = 100;
+
     public const string FieldInstructions =
         "The user copied a block of their own details, then pressed paste in the form field described in the state. " +
         "Which value from the block does that field ask for? Pick the option whose field matches what the form field asks " +
-        "for, and when several values share a field, the one whose belongs_to matches the field's label or sections. " +
-        "Pick none when the field asks for something the block does not contain, or for another person's details, " +
-        "such as an emergency contact, a reference, a manager, or a recruiter.";
+        "for, and when several values share a field, the one whose owner (in parentheses) matches the field's label or " +
+        "sections. Pick none when the field asks for something the block does not contain, or for another person's " +
+        "details, such as an emergency contact, a reference, a manager, or a recruiter.";
 
     private const string NoneDescription = "None of these values belongs in this field";
 
@@ -41,8 +52,12 @@ public sealed class JevQuestion
             throw new ArgumentOutOfRangeException(nameof(options), $"A choice needs 1 to {MaxOptions} options.");
         _byName = new Dictionary<string, JevOption>(StringComparer.Ordinal);
         foreach (var option in options)
+        {
+            if (!IsValidName(option.Name))
+                throw new ArgumentException("Option names use only a-z, 0-9 and '_' (at most 100 characters).", nameof(options));
             if (!_byName.TryAdd(option.Name, option))
                 throw new ArgumentException("Option names must be unique.", nameof(options));
+        }
         State = state;
         Instructions = instructions;
         Options = options;
@@ -53,7 +68,13 @@ public sealed class JevQuestion
     public IReadOnlyList<JevOption> Options { get; }
     public IReadOnlyCollection<string> OptionNames => _byName.Keys;
 
-    public JevOption? Option(string name) => _byName.GetValueOrDefault(name);
+    // The option an answer names. Names are lowercase, so an answer that differs only in case or surrounding spaces
+    // still maps back to its option.
+    public JevOption? Option(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        return _byName.GetValueOrDefault(name) ?? _byName.GetValueOrDefault(name.Trim().ToLowerInvariant());
+    }
 
     // The question for a field: the field's context as state and every distinct value of the profile as an option.
     public static JevQuestion ForField(FieldContext field, Profile profile)
@@ -63,9 +84,10 @@ public sealed class JevQuestion
         return new JevQuestion(field.ToJevState(), FieldInstructions, BuildOptions(profile));
     }
 
-    // One option per distinct value (per key), standard keys first, then "none". A key with one distinct value is
-    // named after the key ("first_name"); otherwise the entity is added ("street.shipping_address"), with a number
-    // when that is still taken. Names are stable for the same profile, so answers map back to values.
+    // One option per distinct value (per key), standard keys first, then "none". Names use only a-z, 0-9 and "_", a
+    // shape every route keeps intact: a key with one distinct value is named after the key ("first_name"); otherwise
+    // the entity follows two underscores ("street__shipping_address"), with a number when that is still taken. Names
+    // are stable for the same profile, so answers map back to values.
     public static IReadOnlyList<JevOption> BuildOptions(Profile profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
@@ -77,27 +99,23 @@ public sealed class JevQuestion
         foreach (var key in profile.Keys)
         {
             var values = DistinctValues(profile, key);
+            var keyName = Slug(key, KeyNameLimit, "value");
             foreach (var (entity, value) in values.Take(room - options.Count))
             {
-                var name = Unique(values.Count == 1 ? key : $"{key}.{Slug(entity.Label)}", used);
-                var description = new JsonObject
-                {
-                    ["field"] = FieldKeys.Describe(key),
-                    ["value"] = Cut(value, ValueLimit)
-                };
-                if (severalEntities || values.Count > 1) description["belongs_to"] = Cut(entity.Label, ValueLimit);
-                options.Add(new JevOption(name, description, new Candidate(key, entity.Label, value)));
+                var name = Unique(values.Count == 1 ? keyName : $"{keyName}__{Slug(entity.Label, EntityNameLimit, "item")}", used);
+                var owner = severalEntities || values.Count > 1 ? entity.Label : null;
+                options.Add(new JevOption(name, JsonValue.Create(Describe(key, owner, value)), new Candidate(key, entity.Label, value)));
             }
         }
         options.Add(new JevOption(NoneOption, JsonValue.Create(NoneDescription), null));
         return options;
     }
 
-    // The request body for one route. Nodes are cloned so the same question can be sent to a second route.
+    // The request body for one route. The state is cloned so the same question can be sent to a second route.
     internal JsonObject ToRequestBody(string model, string questionId)
     {
         var criteria = new JsonObject();
-        foreach (var option in Options) criteria[option.Name] = option.Description.DeepClone();
+        foreach (var option in Options) criteria[option.Name] = option.DescriptionText;
         return new JsonObject
         {
             ["model"] = model,
@@ -127,6 +145,23 @@ public sealed class JevQuestion
         return values;
     }
 
+    // "Street (shipping address): 2 Oak Ave — Street address: house number and street (address line 1)". The
+    // definition after the dash tells neighbours apart (first name vs full name); it is left out when it would only
+    // repeat the name, as for extra keys.
+    private static string Describe(string key, string? owner, string value)
+    {
+        var name = FieldKeys.DisplayName(key);
+        var text = new StringBuilder(name);
+        if (owner is not null && Cut(owner, ValueLimit) is { Length: > 0 } entity) text.Append(" (").Append(entity).Append(')');
+        text.Append(": ").Append(Cut(value, ValueLimit));
+        var meaning = FieldKeys.Describe(key);
+        if (!string.Equals(meaning, name, StringComparison.OrdinalIgnoreCase)) text.Append(" — ").Append(meaning);
+        return text.ToString();
+    }
+
+    private static bool IsValidName(string? name) =>
+        !string.IsNullOrEmpty(name) && name.Length <= NameLimit && name.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c) || c == '_');
+
     private static string Unique(string name, HashSet<string> used)
     {
         var candidate = name;
@@ -134,18 +169,38 @@ public sealed class JevQuestion
         return candidate;
     }
 
-    // "Shipping address" -> "shipping_address".
-    private static string Slug(string label)
+    // "Shipping address" -> "shipping_address", "número" -> "numero", "work_phone_#" -> "work_phone": lowercase ASCII
+    // letters and digits joined by single underscores, at most limit characters, or fallback when nothing is left.
+    private static string Slug(string text, int limit, string fallback)
     {
-        var builder = new StringBuilder(label.Length);
-        foreach (var c in label.Trim().ToLowerInvariant())
+        var builder = new StringBuilder(text.Length);
+        foreach (var c in WithoutAccents(text))
         {
-            if (char.IsAsciiLetterOrDigit(c)) builder.Append(c);
+            var lower = char.ToLowerInvariant(c);
+            if (char.IsAsciiLetterLower(lower) || char.IsAsciiDigit(lower)) builder.Append(lower);
             else if (builder.Length > 0 && builder[^1] != '_') builder.Append('_');
         }
         var slug = builder.ToString().Trim('_');
-        if (slug.Length > 24) slug = slug[..24].TrimEnd('_');
-        return slug.Length == 0 ? "item" : slug;
+        if (slug.Length > limit) slug = slug[..limit].TrimEnd('_');
+        return slug.Length == 0 ? fallback : slug;
+    }
+
+    // "número" -> "numero": accents are split off and dropped. Text that is not valid Unicode is kept as it is.
+    private static string WithoutAccents(string text)
+    {
+        string decomposed;
+        try
+        {
+            decomposed = text.Normalize(NormalizationForm.FormD);
+        }
+        catch (ArgumentException)
+        {
+            return text;
+        }
+        var builder = new StringBuilder(decomposed.Length);
+        foreach (var c in decomposed)
+            if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark) builder.Append(c);
+        return builder.ToString();
     }
 
     private static string Collapse(string value) =>
