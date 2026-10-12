@@ -133,8 +133,8 @@
             <ui:Button
               Grid.Column="2"
               Margin="16,0,0,0"
-              Appearance="Primary"
               Command="{Binding RestartCommand}"
+              Style="{StaticResource Brand.PrimaryButton}"
               Content="Restart now"
               Visibility="{Binding CanRestart, Converter={StaticResource Settings.BoolToVisibility}}" />
             <!-- What's new in that version, from its release notes. -->

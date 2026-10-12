@@ -4,8 +4,8 @@ using System.Windows.Media;
 
 namespace SmartPaste.App.UI.Controls;
 
-// A highlighter stroke behind its content, with the slanted chisel-tip ends of the logo's mark. Smart Paste uses
-// it for the one value that matters in a view: the armed field count, the selected choice in the picker.
+// A soft, rounded mark behind its content, like selected text. Smart Paste uses it for the one value that matters
+// in a view: the armed field count, the value Ctrl+V will paste.
 public sealed class HighlighterMark : Decorator
 {
     public static readonly DependencyProperty FillProperty = DependencyProperty.Register(
@@ -51,17 +51,7 @@ public sealed class HighlighterMark : Decorator
     protected override void OnRender(DrawingContext dc)
     {
         if (Fill is null || ActualWidth <= 0 || ActualHeight <= 0) return;
-        // The same slant as the logo: about a fifth of the stroke's height.
-        var slant = Math.Min(ActualHeight * 0.2, ActualWidth / 4);
-        var stroke = new StreamGeometry();
-        using (var g = stroke.Open())
-        {
-            g.BeginFigure(new Point(slant, 0), isFilled: true, isClosed: true);
-            g.LineTo(new Point(ActualWidth, 0), true, false);
-            g.LineTo(new Point(ActualWidth - slant, ActualHeight), true, false);
-            g.LineTo(new Point(0, ActualHeight), true, false);
-        }
-        stroke.Freeze();
-        dc.DrawGeometry(Fill, null, stroke);
+        var radius = Math.Min(4, ActualHeight / 2);
+        dc.DrawRoundedRectangle(Fill, null, new Rect(0, 0, ActualWidth, ActualHeight), radius, radius);
     }
 }

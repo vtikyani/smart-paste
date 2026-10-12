@@ -25,7 +25,7 @@ public sealed class TrayIconTests
 
     [Theory]
     [InlineData(false, 255, 255, 255)]
-    [InlineData(true, 0x15, 0x17, 0x1F)]
+    [InlineData(true, 0x0E, 0x0E, 0x12)]
     public void GlyphIsWhiteOnADarkTaskbarAndInkOnALightOne(bool lightTaskbar, byte r, byte g, byte b) => WpfHost.Run(() =>
     {
         var pixels = Opaque(TrayIconRenderer.Render(TrayStatus.Ready, Theme(lightTaskbar), 32));
@@ -36,20 +36,20 @@ public sealed class TrayIconTests
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void ArmedShowsAHighlighterBadgeInTheLowerRight(bool lightTaskbar) => WpfHost.Run(() =>
+    public void ArmedShowsAnOpalBadgeInTheLowerRight(bool lightTaskbar) => WpfHost.Run(() =>
     {
         var theme = Theme(lightTaskbar);
         var bitmap = TrayIconRenderer.Render(TrayStatus.Armed, theme, 32);
-        Assert.Contains(Opaque(bitmap), p => p.X >= 20 && p.Y >= 20 && IsYellow(p));
-        Assert.DoesNotContain(Opaque(TrayIconRenderer.Render(TrayStatus.Ready, theme, 32)), IsYellow);
+        Assert.Contains(Opaque(bitmap), p => p.X >= 20 && p.Y >= 20 && IsOpal(p));
+        Assert.DoesNotContain(Opaque(TrayIconRenderer.Render(TrayStatus.Ready, theme, 32)), IsOpal);
     });
 
     [Fact]
-    public void AttentionBadgeIsAmberNotHighlighterYellow() => WpfHost.Run(() =>
+    public void AttentionBadgeIsAmberNotOpal() => WpfHost.Run(() =>
     {
         var pixels = Opaque(TrayIconRenderer.Render(TrayStatus.Attention, TaskbarTheme.Dark, 32));
-        Assert.Contains(pixels, p => p.R > 240 && p.G is > 130 and < 180 && p.B < 60);
-        Assert.DoesNotContain(pixels, IsYellow);
+        Assert.Contains(pixels, p => p.R > 240 && p.G is > 170 and < 210 && p.B < 60);
+        Assert.DoesNotContain(pixels, IsOpal);
     });
 
     [Fact]
@@ -94,7 +94,9 @@ public sealed class TrayIconTests
 
     private static TaskbarTheme Theme(bool light) => light ? TaskbarTheme.Light : TaskbarTheme.Dark;
 
-    private static bool IsYellow(Px p) => p.R > 230 && p.G > 190 && p.B < 110;
+    // Every opal stop is a strong color with plenty of blue (ice, periwinkle, orchid, blush); the glyph is white or
+    // near-black and the attention badge is amber.
+    private static bool IsOpal(Px p) => p.B > 190 && Math.Max(p.R, Math.Max(p.G, p.B)) - Math.Min(p.R, Math.Min(p.G, p.B)) > 60;
 
     private static List<Px> Opaque(BitmapSource bitmap)
     {

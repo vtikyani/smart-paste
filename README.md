@@ -35,7 +35,8 @@ Smart Paste asks Jev as soon as you click into a field. So the answer is usually
 - **Screenshots too, if you want.** It can read text in a copied screenshot with Windows' built-in, offline text
   recognition (OCR). This is off until you turn it on.
 - **You stay in control.** Pause it, turn it off, or exclude apps where it should never step in.
-- **Modern Windows look.** Tray flyout, settings, and a welcome tour with a practice form. Light and dark.
+- **Calm, modern look.** A quiet, dark-first design with one bright accent: tray flyout, settings, and a welcome
+  tour with a practice form. Dark and light.
 - **Updates itself.** New versions download in the background and install when you restart it.
 - **Private by design.** See [Privacy](#privacy).
 
@@ -222,7 +223,7 @@ are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
 - [TypeSafe](https://typesafe.ai), for Jev, the model that decides every paste.
 - [OpenRouter](https://openrouter.ai), for one key to run both the reader and Jev.
-- [WPF UI](https://github.com/lepoco/wpfui), for the Windows 11 look.
+- [WPF UI](https://github.com/lepoco/wpfui), for the controls the app is built from.
 - [H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon), for the tray icon.
 - [Velopack](https://github.com/velopack/velopack), for the installer and updates.
 - [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet), for the app's view models.

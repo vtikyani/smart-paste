@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 using Microsoft.Win32;
 using SmartPaste.App.Infrastructure;
 using Wpf.Ui.Appearance;
@@ -6,11 +7,19 @@ using Wpf.Ui.Controls;
 
 namespace SmartPaste.App.UI.Theme;
 
-// Applies the app theme from settings (System, Light, or Dark): WPF-UI's Fluent resources with the Windows accent
-// color, plus the matching brand dictionary (Brand.Light.xaml, Brand.Dark.xaml, or Brand.HighContrast.xaml).
-// When set to System it follows Windows live, including high contrast and accent color changes.
+// Applies the app theme from settings (System, Light, or Dark): WPF-UI's resources with Smart Paste's periwinkle
+// accent, plus the matching brand dictionary (Brand.Light.xaml, Brand.Dark.xaml, or Brand.HighContrast.xaml), which
+// also restyles WPF-UI's neutrals. When set to System it follows Windows live, including high contrast, where the
+// user's own system colors win.
 internal sealed class ThemeService : IDisposable
 {
+    // Whisp's solid accent, one per theme: toggles, focus rings, links, the primary button. WPF-UI derives its accent
+    // brushes from four shades (the third fills controls, the fourth colors accent text).
+    private static readonly Color DarkAccent = Color.FromRgb(0x8B, 0x9B, 0xFF);
+    private static readonly Color DarkAccentText = Color.FromRgb(0xA5, 0xB1, 0xFF);
+    private static readonly Color LightAccent = Color.FromRgb(0x5B, 0x63, 0xE6);
+    private static readonly Color LightAccentText = Color.FromRgb(0x4A, 0x52, 0xD4);
+
     private const string PersonalizeKey = @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
 
     private static readonly Uri LightBrand = BrandUri("Brand.Light.xaml");
@@ -66,7 +75,9 @@ internal sealed class ThemeService : IDisposable
         _application.MainWindow = null;
         try
         {
-            ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: true);
+            var highContrast = theme == ApplicationTheme.HighContrast;
+            ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: highContrast);
+            if (!highContrast) ApplyBrandAccent(theme);
         }
         finally
         {
@@ -82,6 +93,13 @@ internal sealed class ThemeService : IDisposable
 
         Current = theme;
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    // Light or dark only; high contrast keeps the system accent. Tests that render windows call it too.
+    internal static void ApplyBrandAccent(ApplicationTheme theme)
+    {
+        var (accent, text) = theme == ApplicationTheme.Dark ? (DarkAccent, DarkAccentText) : (LightAccent, LightAccentText);
+        ApplicationAccentColorManager.Apply(accent, accent, accent, text);
     }
 
     private void SwapBrandDictionary(ApplicationTheme theme)
@@ -147,8 +165,8 @@ internal sealed class ThemeService : IDisposable
         else _application.Dispatcher.BeginInvoke(Apply);
     }
 
-    // Light/dark, accent, and high contrast changes all go through the same path; with a fixed Light or Dark
-    // preference this still refreshes the accent color and honors high contrast.
+    // Light/dark and high contrast changes go through the same path; with a fixed Light or Dark preference this still
+    // honors high contrast.
     private void OnAppearanceChanged(object? sender, EventArgs e) => Apply();
 
     public void Dispose()

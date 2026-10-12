@@ -5,7 +5,7 @@ using SmartPaste.App.Services;
 
 namespace SmartPaste.App.UI.Settings;
 
-// How the status card at the top of the settings pane looks.
+// The status chip at the bottom of the sidebar: its dot's color.
 internal enum StatusTone { Ready, Armed, Busy, Paused, Off, Attention }
 
 // The settings window itself: the live status card and the notice banner. Pages have their own view models.

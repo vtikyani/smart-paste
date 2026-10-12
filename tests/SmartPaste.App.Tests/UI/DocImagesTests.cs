@@ -16,8 +16,6 @@ using Wpf.Ui.Appearance;
 // set (for example docs/images) and to a throwaway folder otherwise.
 public sealed class DocImagesTests : IDisposable
 {
-    private static readonly Color WindowsDefaultAccent = Color.FromRgb(0x00, 0x78, 0xD4);
-
     private readonly string _settingsPath = Path.Combine(Path.GetTempPath(), "sp-doc-settings-" + Guid.NewGuid().ToString("N") + ".json");
 
     public void Dispose()
@@ -55,8 +53,6 @@ public sealed class DocImagesTests : IDisposable
         {
             settings.Update(s => s with { Theme = preference });
             var dark = preference == ThemePreference.Dark;
-            // The app follows this PC's accent color; the README shows Windows' default blue.
-            ApplicationAccentColorManager.Apply(WindowsDefaultAccent, dark ? ApplicationTheme.Dark : ApplicationTheme.Light);
             written.Add(Save(Flyout(settings, dark), folder, $"flyout-{name}.png"));
             written.Add(Save(Picker(), folder, $"picker-{name}.png"));
             written.Add(Save(Chips(), folder, $"chips-{name}.png"));

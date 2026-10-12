@@ -23,10 +23,14 @@ public sealed class ThemeTests : IDisposable
     public void EveryThemeDefinesTheSameBrandKeys() => WpfHost.Run(() =>
     {
         string[] Keys(ResourceDictionary d) => d.Keys.Cast<object>().Select(k => k.ToString()!).Order(StringComparer.Ordinal).ToArray();
+        string[] BrandKeys(ResourceDictionary d) => Keys(d).Where(k => k.StartsWith("Brand.", StringComparison.Ordinal)).ToArray();
+        // Light and dark also restyle WPF-UI's own brushes, the same ones each. High contrast leaves those to
+        // WPF-UI's high contrast theme, which uses the system colors.
         var light = Keys(Load("Brand.Light.xaml"));
         Assert.Equal(light, Keys(Load("Brand.Dark.xaml")));
-        Assert.Equal(light, Keys(Load("Brand.HighContrast.xaml")));
+        Assert.Equal(BrandKeys(Load("Brand.Light.xaml")), BrandKeys(Load("Brand.HighContrast.xaml")));
         Assert.Contains("Brand.LogoMonoImage", light);
+        Assert.Contains("CardBackgroundFillColorDefaultBrush", light);
     });
 
     [Fact]
@@ -50,13 +54,18 @@ public sealed class ThemeTests : IDisposable
         settings.Update(s => s with { Theme = ThemePreference.Light });
         Assert.Equal(ApplicationTheme.Light, theme.Current);
         Assert.Equal(ApplicationTheme.Light, ApplicationThemeManager.GetAppTheme());
-        Assert.Equal(Color.FromRgb(0xF9, 0xFA, 0xFB), Brush("Brand.PopupSurfaceBrush"));
-        Assert.Equal(Color.FromArgb(0xE4, 0, 0, 0), MonoLogoColor());
+        Assert.Equal(Color.FromRgb(0xFF, 0xFF, 0xFF), Brush("Brand.PopupSurfaceBrush"));
+        Assert.Equal(Color.FromRgb(0x0E, 0x0E, 0x12), MonoLogoColor());
+        // WPF-UI's own brushes wear the brand palette, and the accent is periwinkle, not the Windows accent.
+        Assert.Equal(Color.FromRgb(0xF7, 0xF7, 0xF9), Brush("ApplicationBackgroundBrush"));
+        Assert.Equal(Color.FromRgb(0x5B, 0x63, 0xE6), Brush("AccentFillColorDefaultBrush"));
 
         settings.Update(s => s with { Theme = ThemePreference.Dark });
         Assert.Equal(ApplicationTheme.Dark, theme.Current);
-        Assert.Equal(Color.FromRgb(0x25, 0x27, 0x2E), Brush("Brand.PopupSurfaceBrush"));
+        Assert.Equal(Color.FromArgb(0xF2, 0x0E, 0x0E, 0x12), Brush("Brand.PopupSurfaceBrush"));
         Assert.Equal(Colors.White, MonoLogoColor());
+        Assert.Equal(Color.FromRgb(0x0B, 0x0B, 0x0E), Brush("ApplicationBackgroundBrush"));
+        Assert.Equal(Color.FromRgb(0x8B, 0x9B, 0xFF), Brush("AccentFillColorDefaultBrush"));
 
         // Swapping replaces the theme dictionary; it never stacks a second one.
         string[] themed = ["Brand.Light.xaml", "Brand.Dark.xaml", "Brand.HighContrast.xaml"];

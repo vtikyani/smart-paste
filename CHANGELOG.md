@@ -18,7 +18,7 @@ The work for version 1.0.0, the first public release. Smart Paste was rebuilt fr
 - Without any key, Smart Paste still works, with a built-in label list and the labels it learns on your PC.
 - Win+Alt+V opens a picker with every copied value, and typing filters it. The shortcut can be changed.
 - Field hints show what Ctrl+V will paste into the focused field.
-- A Windows 11 style interface: tray flyout, settings, and a welcome tour with a practice form. Light and dark.
+- A calm, dark-first interface: tray flyout, settings, and a welcome tour with a practice form. Dark and light.
 - Pause, per-app exclusions, and a Learned labels page to review and remove what Smart Paste learned.
 - Optional reading of copied screenshots with Windows' built-in offline text recognition (OCR). Off by default.
 - An installer that installs the .NET 10 Desktop Runtime when it is missing, a portable zip, and automatic updates

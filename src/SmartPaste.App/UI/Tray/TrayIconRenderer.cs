@@ -101,7 +101,7 @@ internal static class TrayIconRenderer
         var radius = badge.Radius * scale;
         if (ring is not null)
         {
-            // The ring is the dot's own outer pixel in a deeper shade, so a yellow dot still has an edge on a
+            // The ring is the dot's own outer pixel in a deeper shade, so the pastel dot still has an edge on a
             // light taskbar.
             dc.DrawEllipse(ring, null, badge.Center, radius, radius);
             var inner = Math.Max(0.5, radius - badge.Ring);
@@ -184,18 +184,19 @@ internal static class TrayIconRenderer
 
     private sealed record Palette(Brush Glyph, Brush Armed, Brush? ArmedRing, Brush Attention, Brush AttentionMark)
     {
+        // Monochrome while waiting, opal when a block is ready to paste, as Whisp's icon is while it listens.
         private static readonly Palette OnDark = new(
             Glyph: Frozen(Colors.White),
-            Armed: Frozen(BrandArt.Highlighter),
+            Armed: FrozenOpal(),
             ArmedRing: null,
-            Attention: Frozen(Color.FromRgb(0xFF, 0x9F, 0x1C)),
+            Attention: Frozen(Color.FromRgb(0xFB, 0xBF, 0x24)),
             AttentionMark: Frozen(BrandArt.Ink));
 
         private static readonly Palette OnLight = new(
             Glyph: Frozen(BrandArt.Ink),
-            Armed: Frozen(BrandArt.Highlighter),
-            ArmedRing: Frozen(Color.FromRgb(0xB5, 0x86, 0x00)),
-            Attention: Frozen(Color.FromRgb(0xE0, 0x72, 0x00)),
+            Armed: FrozenOpal(),
+            ArmedRing: Frozen(Color.FromRgb(0x5B, 0x63, 0xE6)),
+            Attention: Frozen(Color.FromRgb(0xD9, 0x77, 0x06)),
             AttentionMark: Frozen(Colors.White));
 
         public static Palette For(TaskbarTheme theme) => theme == TaskbarTheme.Light ? OnLight : OnDark;
@@ -203,6 +204,16 @@ internal static class TrayIconRenderer
         private static SolidColorBrush Frozen(Color color)
         {
             var brush = new SolidColorBrush(color);
+            brush.Freeze();
+            return brush;
+        }
+
+        // Corner to corner across the dot, so even a few pixels show both ends of the gradient.
+        private static LinearGradientBrush FrozenOpal()
+        {
+            var brush = BrandArt.Opal();
+            brush.StartPoint = new Point(0, 0);
+            brush.EndPoint = new Point(1, 1);
             brush.Freeze();
             return brush;
         }

@@ -44,11 +44,11 @@ internal static class UiRender
         return root;
     }
 
-    // Wraps content in a panel shaped like a Windows 11 flyout: rounded, hairline edge, soft shadow, with the
-    // backdrop's solid fallback color standing in for acrylic (which only exists on screen).
+    // Wraps content in a panel shaped like the tray flyout on screen: rounded by Windows, hairline edge, soft shadow,
+    // on the app background the flyout window uses.
     public static FrameworkElement FlyoutFrame(FrameworkElement content, bool dark)
     {
-        var fill = new SolidColorBrush(dark ? Color.FromRgb(0x2C, 0x2C, 0x2C) : Color.FromRgb(0xF9, 0xF9, 0xF9));
+        var fill = Application.Current.TryFindResource("ApplicationBackgroundBrush") as Brush ?? Brushes.Black;
         var grid = new Grid { Margin = new Thickness(36, 28, 36, 48) };
         grid.Children.Add(new Border
         {

@@ -16,10 +16,10 @@
   <settings:FalseToVisibleConverter x:Key="Settings.FalseToVisible" />
   <settings:TextToVisibleConverter x:Key="Settings.TextToVisible" />
 
-  <!-- Page column: generous side margins, a readable maximum width, left aligned like Windows Settings. -->
+  <!-- Page column: generous side margins and a readable maximum width, left aligned. -->
   <Style x:Key="Settings.Page" TargetType="StackPanel">
-    <Setter Property="Margin" Value="40,28,40,40" />
-    <Setter Property="MaxWidth" Value="920" />
+    <Setter Property="Margin" Value="40,24,40,48" />
+    <Setter Property="MaxWidth" Value="880" />
     <Setter Property="HorizontalAlignment" Value="Stretch" />
   </Style>
 
@@ -77,16 +77,17 @@
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>
 
-  <!-- One setting: icon, title and one line of explanation on the left, its control on the right. Setting rows
-       keep the Fluent control radius, like Windows Settings; feature cards use Brand.RadiusCard. -->
+  <!-- One setting: icon, title and one line of explanation on the left, its control on the right. A quiet card on
+       surface-1 with a hairline border. -->
   <Style x:Key="Settings.Card" TargetType="ui:CardControl" BasedOn="{StaticResource {x:Type ui:CardControl}}">
-    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="Margin" Value="0,0,0,8" />
     <Setter Property="MinHeight" Value="68" />
-    <Setter Property="Padding" Value="16,12,16,12" />
+    <Setter Property="Padding" Value="18,14,18,14" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Brand.RadiusCard}" />
   </Style>
 
   <Style x:Key="Settings.Expander" TargetType="ui:CardExpander" BasedOn="{StaticResource {x:Type ui:CardExpander}}">
-    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="Margin" Value="0,0,0,8" />
   </Style>
 
   <!-- A card with free-form content, drawn like a CardControl so both sit together without seams. -->
@@ -94,9 +95,41 @@
     <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
     <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
     <Setter Property="BorderThickness" Value="1" />
-    <Setter Property="CornerRadius" Value="{DynamicResource ControlCornerRadius}" />
-    <Setter Property="Padding" Value="16" />
-    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="CornerRadius" Value="{DynamicResource Brand.RadiusCard}" />
+    <Setter Property="Padding" Value="18" />
+    <Setter Property="Margin" Value="0,0,0,8" />
+  </Style>
+
+  <!-- The live status at the bottom of the sidebar: a small card that lifts on hover. -->
+  <Style x:Key="Settings.StatusChip" TargetType="Button">
+    <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FocusVisualStyle" Value="{DynamicResource Brand.FocusRingCard}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="Button">
+          <Border
+            x:Name="Chrome"
+            Padding="{TemplateBinding Padding}"
+            Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="{TemplateBinding BorderThickness}"
+            CornerRadius="{DynamicResource Brand.RadiusCard}">
+            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource ControlFillColorTertiaryBrush}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
   </Style>
 
   <!-- A row inside a Settings.Panel list, separated by a hairline. -->
@@ -107,26 +140,29 @@
     <Setter Property="MinHeight" Value="52" />
   </Style>
 
-  <!-- Soft square behind an icon: the visual anchor of a card or a promise. -->
+  <!-- Raised square behind an icon: the visual anchor of a card or a promise. -->
   <Style x:Key="Settings.IconTile" TargetType="Border">
     <Setter Property="Width" Value="40" />
     <Setter Property="Height" Value="40" />
     <Setter Property="CornerRadius" Value="{DynamicResource Brand.RadiusControl}" />
-    <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+    <Setter Property="Background" Value="{DynamicResource Brand.Surface2Brush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource Brand.BorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
     <Setter Property="VerticalAlignment" Value="Top" />
   </Style>
 
-  <!-- The highlighter: brand yellow behind ink, for the one moment a value is chosen. -->
+  <!-- The chosen value: a soft periwinkle tile with the icon in the accent, for the one moment a value is chosen. -->
   <Style x:Key="Settings.HighlighterTile" TargetType="Border" BasedOn="{StaticResource Settings.IconTile}">
-    <Setter Property="Background" Value="{DynamicResource Brand.HighlightFillBrush}" />
-    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brand.HighlightTextBrush}" />
+    <Setter Property="Background" Value="{DynamicResource Brand.AccentSoftBrush}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="TextElement.Foreground" Value="{DynamicResource Brand.AccentBrush}" />
   </Style>
 
   <!-- Small status label: "Saved", "Not set", "Optional". -->
   <Style x:Key="Settings.Pill" TargetType="Border">
     <Setter Property="CornerRadius" Value="{DynamicResource Brand.RadiusPill}" />
     <Setter Property="Padding" Value="9,2,10,3" />
-    <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+    <Setter Property="Background" Value="{DynamicResource Brand.Surface3Brush}" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="HorizontalAlignment" Value="Left" />
   </Style>

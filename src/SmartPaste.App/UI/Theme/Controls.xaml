@@ -3,34 +3,116 @@
 <ResourceDictionary
   xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
   xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-  xmlns:controls="clr-namespace:SmartPaste.App.UI.Controls">
+  xmlns:controls="clr-namespace:SmartPaste.App.UI.Controls"
+  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
 
   <controls:VisibleWhenConverter x:Key="SmartPaste.VisibleWhen" />
 
-  <!-- A key cap: a small raised key with the key's name, like "Ctrl" or "V". -->
+  <!-- Focus rings in the accent, a little outside the control. As focus visuals, Windows shows them only while the
+       keyboard is in use, never for a click or a focus the app sets itself. -->
+  <Style x:Key="Brand.FocusRing">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Border Margin="-3" BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" BorderThickness="2" CornerRadius="10" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <Style x:Key="Brand.FocusRingCard">
+    <Setter Property="Control.Template">
+      <Setter.Value>
+        <ControlTemplate>
+          <Border Margin="-3" BorderBrush="{DynamicResource FocusStrokeColorOuterBrush}" BorderThickness="2" CornerRadius="14" />
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- The primary action: an inverse button (white on dark, ink on light) with a soft opal glow behind it that
+       brightens on hover. The one place the gradient meets a control, and text never sits on it. -->
+  <Style x:Key="Brand.PrimaryButton" TargetType="{x:Type ui:Button}">
+    <Setter Property="Background" Value="{DynamicResource Brand.InverseBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource Brand.OnInverseBrush}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Padding" Value="16,6" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="FocusVisualStyle" Value="{StaticResource Brand.FocusRing}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="{x:Type ui:Button}">
+          <Grid>
+            <Border
+              x:Name="Glow"
+              Margin="2,3,2,0"
+              Background="{DynamicResource Brand.OpalBrush}"
+              CornerRadius="{DynamicResource Brand.RadiusControl}"
+              Opacity="{DynamicResource Brand.GlowOpacity}">
+              <Border.Effect>
+                <BlurEffect Radius="14" RenderingBias="Quality" />
+              </Border.Effect>
+            </Border>
+            <Border
+              x:Name="Chrome"
+              Padding="{TemplateBinding Padding}"
+              Background="{TemplateBinding Background}"
+              CornerRadius="{DynamicResource Brand.RadiusControl}">
+              <ContentPresenter
+                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                RecognizesAccessKey="True"
+                TextElement.Foreground="{TemplateBinding Foreground}" />
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Glow" Property="Opacity" Value="{DynamicResource Brand.GlowHoverOpacity}" />
+            </Trigger>
+            <Trigger Property="IsPressed" Value="True">
+              <Setter TargetName="Chrome" Property="Opacity" Value="0.88" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Glow" Property="Visibility" Value="Collapsed" />
+              <Setter TargetName="Chrome" Property="Opacity" Value="0.4" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- A key cap: a small raised key with the key's name, like "Ctrl" or "V". A surface-2 cap with a hairline,
+       sitting on a darker bottom edge. -->
   <Style TargetType="{x:Type controls:KeyCap}">
-    <Setter Property="FontSize" Value="11" />
-    <Setter Property="Height" Value="20" />
-    <Setter Property="MinWidth" Value="20" />
-    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Height" Value="22" />
+    <Setter Property="MinWidth" Value="22" />
+    <Setter Property="Padding" Value="7,0" />
     <Setter Property="VerticalAlignment" Value="Center" />
     <Setter Property="Template">
       <Setter.Value>
         <ControlTemplate TargetType="{x:Type controls:KeyCap}">
-          <Border
-            Padding="{TemplateBinding Padding}"
-            Background="{DynamicResource Brand.KeyCapBrush}"
-            BorderBrush="{DynamicResource Brand.KeyCapBorderBrush}"
-            BorderThickness="1,1,1,2"
-            CornerRadius="4">
-            <TextBlock
-              HorizontalAlignment="Center"
-              VerticalAlignment="Center"
-              FontFamily="{TemplateBinding FontFamily}"
-              FontSize="{TemplateBinding FontSize}"
-              FontWeight="SemiBold"
-              Foreground="{DynamicResource Brand.KeyCapTextBrush}"
-              Text="{TemplateBinding Text}" />
+          <Border Padding="0,0,0,1" Background="{DynamicResource Brand.KeyCapEdgeBrush}" CornerRadius="6">
+            <Border
+              Padding="{TemplateBinding Padding}"
+              Background="{DynamicResource Brand.KeyCapBrush}"
+              BorderBrush="{DynamicResource Brand.KeyCapBorderBrush}"
+              BorderThickness="1"
+              CornerRadius="6">
+              <TextBlock
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                FontFamily="{TemplateBinding FontFamily}"
+                FontSize="{TemplateBinding FontSize}"
+                FontWeight="Medium"
+                Foreground="{DynamicResource Brand.KeyCapTextBrush}"
+                Text="{TemplateBinding Text}" />
+            </Border>
           </Border>
         </ControlTemplate>
       </Setter.Value>

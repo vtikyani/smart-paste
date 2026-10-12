@@ -12,9 +12,10 @@
   Title="Welcome to Smart Paste"
   Width="760"
   Height="560"
+  Background="{DynamicResource ApplicationBackgroundBrush}"
   ExtendsContentIntoTitleBar="True"
   ResizeMode="NoResize"
-  WindowBackdropType="Mica"
+  WindowBackdropType="None"
   WindowCornerPreference="Round"
   WindowStartupLocation="CenterScreen">
 
@@ -96,8 +97,8 @@
         <ui:Button
           x:Name="NextButton"
           MinWidth="120"
-          Appearance="Primary"
           Command="{Binding NextCommand}"
+          Style="{StaticResource Brand.PrimaryButton}"
           Content="{Binding NextText}" />
       </StackPanel>
     </Grid>

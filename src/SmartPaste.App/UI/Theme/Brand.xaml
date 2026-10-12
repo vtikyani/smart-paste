@@ -1,7 +1,8 @@
 <!--
-  Smart Paste design tokens that do not change with light/dark theme.
-  The brand idea is a highlighter: ink plus highlighter yellow, marking the one value that belongs in a field.
-  Interactive controls keep the Windows accent color (WPF-UI); brand yellow is for the logo and key moments.
+  Smart Paste design tokens that do not change with light/dark theme. The design language is Whisp's (the sibling
+  app): calm and neutral, near-black first, with one expressive element, the opal gradient, kept for the logo, the
+  active sidebar marker, the moment a value lands, and progress. Controls use one solid accent, periwinkle, set by
+  the theme service. Text never sits on the gradient.
   Theme-dependent brushes live in Brand.Light.xaml / Brand.Dark.xaml / Brand.HighContrast.xaml under the same
   keys; use DynamicResource for those.
 -->
@@ -11,25 +12,38 @@
   xmlns:sys="clr-namespace:System;assembly=System.Runtime"
   xmlns:brand="clr-namespace:SmartPaste.App.UI.Brand">
 
-  <!-- Palette -->
-  <Color x:Key="Brand.InkColor">#15171F</Color>
-  <Color x:Key="Brand.PaperColor">#FBFAF7</Color>
-  <Color x:Key="Brand.HighlighterColor">#FFD43B</Color>
-  <Color x:Key="Brand.HighlighterDeepColor">#F2B705</Color>
+  <!-- The opal gradient: ice, periwinkle, orchid, blush. -->
+  <Color x:Key="Brand.OpalIceColor">#67E8F9</Color>
+  <Color x:Key="Brand.OpalPeriwinkleColor">#818CF8</Color>
+  <Color x:Key="Brand.OpalOrchidColor">#C084FC</Color>
+  <Color x:Key="Brand.OpalBlushColor">#F9A8D4</Color>
 
-  <SolidColorBrush x:Key="Brand.InkBrush" Color="{StaticResource Brand.InkColor}" />
-  <SolidColorBrush x:Key="Brand.PaperBrush" Color="{StaticResource Brand.PaperColor}" />
-  <SolidColorBrush x:Key="Brand.HighlighterBrush" Color="{StaticResource Brand.HighlighterColor}" />
-  <SolidColorBrush x:Key="Brand.HighlighterDeepBrush" Color="{StaticResource Brand.HighlighterDeepColor}" />
+  <!-- Left to right, slightly tilted like Whisp's 100 degree CSS gradient. -->
+  <LinearGradientBrush x:Key="Brand.OpalBrush" StartPoint="0,0.4" EndPoint="1,0.6">
+    <GradientStop Offset="0" Color="{StaticResource Brand.OpalIceColor}" />
+    <GradientStop Offset="0.35" Color="{StaticResource Brand.OpalPeriwinkleColor}" />
+    <GradientStop Offset="0.65" Color="{StaticResource Brand.OpalOrchidColor}" />
+    <GradientStop Offset="1" Color="{StaticResource Brand.OpalBlushColor}" />
+  </LinearGradientBrush>
 
-  <!-- The full-color mark (clipboard, highlighted line, caret) on a square frame. Resolution independent. -->
+  <!-- Bottom to top, for thin vertical marks such as the active sidebar item. -->
+  <LinearGradientBrush x:Key="Brand.OpalVerticalBrush" StartPoint="0,1" EndPoint="0,0">
+    <GradientStop Offset="0" Color="{StaticResource Brand.OpalIceColor}" />
+    <GradientStop Offset="0.35" Color="{StaticResource Brand.OpalPeriwinkleColor}" />
+    <GradientStop Offset="0.65" Color="{StaticResource Brand.OpalOrchidColor}" />
+    <GradientStop Offset="1" Color="{StaticResource Brand.OpalBlushColor}" />
+  </LinearGradientBrush>
+
+  <!-- The full-color mark (clipboard, opal-highlighted line, caret) on a square frame. Resolution independent. -->
   <DrawingImage x:Key="Brand.LogoImage" Drawing="{x:Static brand:BrandArt.Logo}" />
 
-  <!-- Shape -->
+  <!-- Shape: 8 controls, 12 cards, 16 panels, pills. -->
   <CornerRadius x:Key="Brand.RadiusSmall">6</CornerRadius>
   <CornerRadius x:Key="Brand.RadiusControl">8</CornerRadius>
   <CornerRadius x:Key="Brand.RadiusCard">12</CornerRadius>
-  <CornerRadius x:Key="Brand.RadiusPopup">14</CornerRadius>
+  <CornerRadius x:Key="Brand.RadiusPopup">16</CornerRadius>
+  <!-- WPF-UI's own control radius (buttons, text boxes, combo boxes), raised from 4 to match. -->
+  <CornerRadius x:Key="ControlCornerRadius">8</CornerRadius>
   <!-- WPF shares an oversized radius out per side, so on a Border that is wider than tall this draws an ellipse,
        not a pill. For true pills set controls:Pill.IsPill="True" on the Border instead. -->
   <CornerRadius x:Key="Brand.RadiusPill">999</CornerRadius>
@@ -53,10 +67,11 @@
   <sys:Double x:Key="Brand.SizeTitle">28</sys:Double>
   <sys:Double x:Key="Brand.SizeHero">40</sys:Double>
 
-  <!-- Motion: short and decisive. Enter with a decelerating curve, leave faster than you came. -->
+  <!-- Motion: short and calm. 120 ms for hover and press, 200 ms for state changes, 320 ms for panels. Enter with
+       a decelerating curve, leave faster than you came. -->
   <Duration x:Key="Brand.DurationFast">0:0:0.12</Duration>
-  <Duration x:Key="Brand.DurationNormal">0:0:0.18</Duration>
-  <Duration x:Key="Brand.DurationSlow">0:0:0.28</Duration>
+  <Duration x:Key="Brand.DurationNormal">0:0:0.2</Duration>
+  <Duration x:Key="Brand.DurationSlow">0:0:0.32</Duration>
   <sys:Double x:Key="Brand.EnterOffset">8</sys:Double>
   <QuinticEase x:Key="Brand.EaseOut" EasingMode="EaseOut" />
   <CubicEase x:Key="Brand.EaseIn" EasingMode="EaseIn" />

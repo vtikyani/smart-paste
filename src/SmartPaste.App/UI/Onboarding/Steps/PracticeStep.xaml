@@ -42,9 +42,9 @@
             <TextBlock VerticalAlignment="Center" Style="{StaticResource Onboarding.ItemTitle}" Text="Sample contact" />
             <ui:Button
               HorizontalAlignment="Right"
-              Appearance="Primary"
               AutomationProperties.Name="Copy the sample contact"
-              Command="{Binding CopySampleCommand}">
+              Command="{Binding CopySampleCommand}"
+              Style="{StaticResource Brand.PrimaryButton}">
               <StackPanel Orientation="Horizontal">
                 <ui:SymbolIcon Margin="0,0,6,0" FontSize="14">
                   <ui:SymbolIcon.Style>

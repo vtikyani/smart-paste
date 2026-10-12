@@ -5,28 +5,47 @@ using System.Windows.Media;
 
 namespace SmartPaste.App.UI.Brand;
 
-// The Smart Paste mark: a clipboard whose paper holds a few form lines. One line is marked with a highlighter
-// stroke and a text caret at its end: "this is the value that goes here".
+// The Smart Paste mark: a clipboard whose paper holds a few form lines. One line is marked with an opal stroke
+// and a text caret at its end: "this is the value that goes here". The opal gradient and the neutral ink are the
+// design language Smart Paste shares with Whisp.
 //
 // Everything is vector geometry, hinted to whole pixels for each exact icon size so small sizes stay crisp,
 // with detail removed as the size drops. tools/SmartPaste.IconGen compiles this file too (it renders the app
 // icon from it), so it depends on WPF only.
 public static class BrandArt
 {
-    public static readonly Color Ink = Color.FromRgb(0x15, 0x17, 0x1F);
-    public static readonly Color Paper = Color.FromRgb(0xFB, 0xFA, 0xF7);
-    public static readonly Color Highlighter = Color.FromRgb(0xFF, 0xD4, 0x3B);
+    public static readonly Color Ink = Color.FromRgb(0x0E, 0x0E, 0x12);
+    public static readonly Color Paper = Color.FromRgb(0xF4, 0xF4, 0xF6);
+
+    // The opal gradient: ice, periwinkle, orchid, blush.
+    public static readonly IReadOnlyList<(double Offset, Color Color)> OpalStops =
+    [
+        (0, Color.FromRgb(0x67, 0xE8, 0xF9)),
+        (0.35, Color.FromRgb(0x81, 0x8C, 0xF8)),
+        (0.65, Color.FromRgb(0xC0, 0x84, 0xFC)),
+        (1, Color.FromRgb(0xF9, 0xA8, 0xD4))
+    ];
 
     // The full-color mark is designed on a 256-unit square; the monochrome glyph on a 16-unit square.
     public const double LogoUnits = 256;
     public const double GlyphUnits = 16;
 
     // The board is lit from above so its edge still shows on dark backgrounds.
-    private static readonly Color BoardTop = Color.FromRgb(0x3A, 0x3F, 0x4F);
-    private static readonly Color ClipTop = Color.FromRgb(0xE6, 0xE9, 0xEE);
-    private static readonly Color ClipBottom = Color.FromRgb(0xA7, 0xAD, 0xBA);
-    private static readonly Color ClipSlot = Color.FromRgb(0x5D, 0x63, 0x72);
-    private static readonly Color FormLine = Color.FromRgb(0xCF, 0xD3, 0xDA);
+    private static readonly Color BoardTop = Color.FromRgb(0x30, 0x30, 0x3A);
+    private static readonly Color ClipTop = Color.FromRgb(0xE9, 0xE9, 0xEF);
+    private static readonly Color ClipBottom = Color.FromRgb(0xA8, 0xA8, 0xB4);
+    private static readonly Color ClipSlot = Color.FromRgb(0x5C, 0x5C, 0x68);
+    private static readonly Color FormLine = Color.FromRgb(0xCD, 0xCD, 0xD6);
+
+    // The opal gradient left to right; with no bounds it spans whatever it fills.
+    public static LinearGradientBrush Opal(Rect? bounds = null)
+    {
+        var brush = bounds is { } b
+            ? new LinearGradientBrush { StartPoint = new Point(b.Left, 0), EndPoint = new Point(b.Right, 0), MappingMode = BrushMappingMode.Absolute }
+            : new LinearGradientBrush { StartPoint = new Point(0, 0.4), EndPoint = new Point(1, 0.6) };
+        foreach (var (offset, color) in OpalStops) brush.GradientStops.Add(new GradientStop(color, offset));
+        return brush;
+    }
 
     // Resolution-independent mark for UI use (Brand.LogoImage). Frozen.
     public static Drawing Logo { get; } = Freeze(BuildLogo(LogoSpec.ForSize(null), LogoUnits, snap: false));
@@ -60,6 +79,8 @@ public static class BrandArt
             .Append(Stop(0, BoardTop)).Append(Stop(1, Ink)).Append("</linearGradient>\n")
             .Append("    <linearGradient id=\"clip\" x1=\"0\" y1=\"0\" x2=\"0\" y2=\"1\">")
             .Append(Stop(0, ClipTop)).Append(Stop(1, ClipBottom)).Append("</linearGradient>\n")
+            .Append("    <linearGradient id=\"opal\" x1=\"0\" y1=\"0\" x2=\"1\" y2=\"0\">")
+            .AppendJoin("", OpalStops.Select(s => Stop(s.Offset, s.Color))).Append("</linearGradient>\n")
             .Append("  </defs>\n");
         foreach (var part in spec.Parts)
         {
@@ -67,6 +88,7 @@ public static class BrandArt
             {
                 Fill.Board => "url(#board)",
                 Fill.Clip => "url(#clip)",
+                Fill.Highlight => "url(#opal)",
                 _ => Hex(SolidColor(part.Fill))
             };
             if (part.Polygon is { } points)
@@ -109,6 +131,7 @@ public static class BrandArt
     {
         Fill.Board => Gradient(BoardTop, Ink, bounds),
         Fill.Clip => Gradient(ClipTop, ClipBottom, bounds),
+        Fill.Highlight => Opal(bounds),
         _ => new SolidColorBrush(SolidColor(fill))
     };
 
@@ -119,7 +142,7 @@ public static class BrandArt
         Fill.ClipSlot => ClipSlot,
         Fill.Paper => Paper,
         Fill.Line => FormLine,
-        Fill.Highlight => Highlighter,
+        Fill.Highlight => OpalStops[1].Color,
         _ => Ink
     };
 

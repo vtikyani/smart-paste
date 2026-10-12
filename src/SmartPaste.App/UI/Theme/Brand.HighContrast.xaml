@@ -7,6 +7,23 @@
   xmlns:sys="clr-namespace:System;assembly=System.Runtime"
   xmlns:brand="clr-namespace:SmartPaste.App.UI.Brand">
 
+  <SolidColorBrush x:Key="Brand.BackgroundBrush" Color="{x:Static SystemColors.WindowColor}" />
+  <SolidColorBrush x:Key="Brand.Surface1Brush" Color="{x:Static SystemColors.WindowColor}" />
+  <SolidColorBrush x:Key="Brand.Surface2Brush" Color="{x:Static SystemColors.WindowColor}" />
+  <SolidColorBrush x:Key="Brand.Surface3Brush" Color="{x:Static SystemColors.WindowColor}" />
+  <SolidColorBrush x:Key="Brand.BorderBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.BorderStrongBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.Text1Brush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.Text2Brush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.Text3Brush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.AccentBrush" Color="{x:Static SystemColors.HighlightColor}" />
+  <SolidColorBrush x:Key="Brand.AccentSoftBrush" Color="{x:Static SystemColors.WindowColor}" />
+  <SolidColorBrush x:Key="Brand.TrackBrush" Color="{x:Static SystemColors.GrayTextColor}" />
+  <SolidColorBrush x:Key="Brand.InverseBrush" Color="{x:Static SystemColors.HighlightColor}" />
+  <SolidColorBrush x:Key="Brand.OnInverseBrush" Color="{x:Static SystemColors.HighlightTextColor}" />
+  <sys:Double x:Key="Brand.GlowOpacity">0</sys:Double>
+  <sys:Double x:Key="Brand.GlowHoverOpacity">0</sys:Double>
+
   <SolidColorBrush x:Key="Brand.HighlightFillBrush" Color="{x:Static SystemColors.HighlightColor}" />
   <SolidColorBrush x:Key="Brand.HighlightTextBrush" Color="{x:Static SystemColors.HighlightTextColor}" />
   <SolidColorBrush x:Key="Brand.HighlightWashBrush" Color="{x:Static SystemColors.WindowColor}" />
@@ -21,6 +38,7 @@
   <SolidColorBrush x:Key="Brand.PopupDividerBrush" Color="{x:Static SystemColors.WindowTextColor}" />
   <SolidColorBrush x:Key="Brand.KeyCapBrush" Color="{x:Static SystemColors.WindowColor}" />
   <SolidColorBrush x:Key="Brand.KeyCapBorderBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.KeyCapEdgeBrush" Color="{x:Static SystemColors.WindowTextColor}" />
   <SolidColorBrush x:Key="Brand.KeyCapTextBrush" Color="{x:Static SystemColors.WindowTextColor}" />
   <Color x:Key="Brand.ShadowColor">#00000000</Color>
   <sys:Double x:Key="Brand.ShadowOpacity">0</sys:Double>
@@ -33,6 +51,7 @@
   <SolidColorBrush x:Key="Brand.SuccessBrush" Color="{x:Static SystemColors.WindowTextColor}" />
   <SolidColorBrush x:Key="Brand.WarningBrush" Color="{x:Static SystemColors.WindowTextColor}" />
   <SolidColorBrush x:Key="Brand.DangerBrush" Color="{x:Static SystemColors.WindowTextColor}" />
+  <SolidColorBrush x:Key="Brand.SuccessSoftBrush" Color="{x:Static SystemColors.WindowColor}" />
 
   <SolidColorBrush x:Key="Brand.LogoGlyphBrush" Color="{x:Static SystemColors.WindowTextColor}" />
   <DrawingImage x:Key="Brand.LogoMonoImage">

@@ -168,9 +168,10 @@
                     <Trigger SourceName="Row" Property="IsMouseOver" Value="True">
                       <Setter TargetName="Row" Property="Background" Value="{DynamicResource Brand.PopupHoverBrush}" />
                     </Trigger>
+                    <!-- The row's soft accent is the selection; the value itself only steps up in weight. -->
                     <DataTrigger Binding="{Binding IsSelected}" Value="True">
                       <Setter TargetName="Row" Property="Background" Value="{DynamicResource Brand.PopupSelectedBrush}" />
-                      <Setter TargetName="Mark" Property="Fill" Value="{DynamicResource Brand.HighlightFillBrush}" />
+                      <Setter TargetName="ValueText" Property="FontWeight" Value="SemiBold" />
                       <Setter TargetName="ValueText" Property="Foreground" Value="{DynamicResource Brand.HighlightTextBrush}" />
                       <Setter TargetName="FieldName" Property="Foreground" Value="{DynamicResource Brand.PopupSelectedTextBrush}" />
                     </DataTrigger>

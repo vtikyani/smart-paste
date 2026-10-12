@@ -47,21 +47,21 @@
     <Setter Property="Margin" Value="0,4,0,0" />
   </Style>
 
-  <!-- Progress: a small dot per step; the current one stretches into a short bar. -->
+  <!-- Progress: a small dot per step; the current one stretches into a short opal bar. -->
   <Style x:Key="Onboarding.Dot" TargetType="Border">
     <Setter Property="Width" Value="6" />
     <Setter Property="Height" Value="6" />
     <Setter Property="CornerRadius" Value="3" />
     <Setter Property="Margin" Value="3,0,3,0" />
     <Setter Property="Background" Value="{DynamicResource ControlStrongFillColorDefaultBrush}" />
-    <Setter Property="Opacity" Value="0.55" />
+    <Setter Property="Opacity" Value="0.45" />
     <Style.Triggers>
       <DataTrigger Binding="{Binding IsDone}" Value="True">
-        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-        <Setter Property="Opacity" Value="0.5" />
+        <Setter Property="Background" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+        <Setter Property="Opacity" Value="0.7" />
       </DataTrigger>
       <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-        <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Brand.MarkBrush}" />
         <Setter Property="Opacity" Value="1" />
         <DataTrigger.EnterActions>
           <BeginStoryboard>

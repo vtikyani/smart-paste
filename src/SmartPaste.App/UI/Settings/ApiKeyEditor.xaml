@@ -95,8 +95,8 @@
           MinWidth="88"
           Margin="8,0,0,0"
           VerticalAlignment="Stretch"
-          Appearance="Primary"
           Command="{Binding SaveCommand}"
+          Style="{StaticResource Brand.PrimaryButton}"
           Content="Save" />
       </Grid>
 

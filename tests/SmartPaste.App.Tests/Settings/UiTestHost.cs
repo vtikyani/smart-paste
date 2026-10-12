@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using SmartPaste.App.UI.Theme;
 using Wpf.Ui.Appearance;
 using Wpf.Ui.Controls;
 
@@ -51,14 +52,11 @@ internal static class UiTestHost
         await Dispatcher.Yield(DispatcherPriority.ContextIdle);
     }
 
-    // README pictures show Windows' default accent, not whatever accent the machine running the tests uses.
-    private static readonly Color WindowsDefaultAccent = Color.FromRgb(0x00, 0x78, 0xD4);
-
+    // The same theme the app applies: WPF-UI's resources, Smart Paste's periwinkle accent, and the brand palette.
     public static void UseTheme(ApplicationTheme theme)
     {
-        ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: true);
-        if (Environment.GetEnvironmentVariable(ReadmeFolderVariable) is { Length: > 0 })
-            ApplicationAccentColorManager.Apply(WindowsDefaultAccent, theme);
+        ApplicationThemeManager.Apply(theme, WindowBackdropType.None, updateAccent: false);
+        ThemeService.ApplyBrandAccent(theme);
         var dictionaries = Application.Current.Resources.MergedDictionaries;
         var brand = dictionaries.FirstOrDefault(d =>
             d.Source?.OriginalString.EndsWith("Brand.Dark.xaml", StringComparison.OrdinalIgnoreCase) == true ||
@@ -83,14 +81,13 @@ internal static class UiTestHost
         window.Show();
     }
 
-    // Renders a window's content over a flat stand-in for Mica (which only the desktop compositor can draw).
+    // Renders a window's content over the app background it sits on.
     public static BitmapSource Render(Window window, double scale = 1)
     {
         var content = (FrameworkElement)window.Content;
         content.UpdateLayout();
         var size = new Size(content.ActualWidth, content.ActualHeight);
-        var dark = ApplicationThemeManager.GetAppTheme() == ApplicationTheme.Dark;
-        var backdrop = new SolidColorBrush(dark ? Color.FromRgb(0x20, 0x20, 0x20) : Color.FromRgb(0xF3, 0xF3, 0xF3));
+        var backdrop = Application.Current.TryFindResource("ApplicationBackgroundBrush") as Brush ?? Brushes.Black;
 
         var visual = new DrawingVisual();
         using (var context = visual.RenderOpen())

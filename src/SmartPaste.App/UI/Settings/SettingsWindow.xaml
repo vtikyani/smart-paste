@@ -11,12 +11,13 @@
   mc:Ignorable="d"
   d:DataContext="{d:DesignInstance Type=settings:SettingsViewModel}"
   Title="Smart Paste settings"
-  Width="1060"
-  Height="740"
-  MinWidth="860"
-  MinHeight="560"
+  Width="1080"
+  Height="720"
+  MinWidth="900"
+  MinHeight="600"
+  Background="{DynamicResource ApplicationBackgroundBrush}"
   ExtendsContentIntoTitleBar="True"
-  WindowBackdropType="Mica"
+  WindowBackdropType="None"
   WindowCornerPreference="Round"
   WindowStartupLocation="CenterScreen">
 
@@ -34,15 +35,11 @@
       <RowDefinition Height="*" />
     </Grid.RowDefinitions>
 
+    <!-- The brand lives in the sidebar, so the title bar keeps only the window buttons. -->
     <ui:TitleBar
       x:Name="TitleBar"
       Grid.Row="0"
-      Title="Smart Paste"
-      CloseWindowByDoubleClickOnIcon="False">
-      <ui:TitleBar.Icon>
-        <ui:ImageIcon Width="16" Height="16" Source="{DynamicResource Brand.LogoMonoImage}" />
-      </ui:TitleBar.Icon>
-    </ui:TitleBar>
+      CloseWindowByDoubleClickOnIcon="False" />
 
     <ui:NavigationView
       x:Name="Navigation"
@@ -54,82 +51,70 @@
       IsFooterSeparatorVisible="False"
       IsPaneToggleVisible="False"
       IsTopSeparatorVisible="False"
-      OpenPaneLength="296"
+      OpenPaneLength="240"
       PaneDisplayMode="Left"
       Transition="FadeInWithSlide"
-      TransitionDuration="180">
+      TransitionDuration="200">
 
       <ui:NavigationView.PaneHeader>
-        <!-- Live status: what Smart Paste is doing right now. Selecting it opens the page that explains it. -->
-        <ui:Button
-          Margin="12,4,12,12"
-          Padding="12"
+        <StackPanel Margin="20,0,16,16" Orientation="Horizontal">
+          <Image Width="26" Height="26" Source="{StaticResource Brand.LogoImage}" />
+          <TextBlock
+            Margin="10,0,0,0"
+            VerticalAlignment="Center"
+            FontFamily="{DynamicResource Brand.FontDisplay}"
+            FontSize="{DynamicResource Brand.SizeBodyLarge}"
+            FontWeight="SemiBold"
+            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+            Text="Smart Paste" />
+        </StackPanel>
+      </ui:NavigationView.PaneHeader>
+
+      <ui:NavigationView.PaneFooter>
+        <!-- Live status: what Smart Paste is doing right now, with a colored dot. Selecting it opens the page that
+             explains it. -->
+        <Button
+          Margin="12,8,12,12"
+          Padding="12,9,10,9"
           HorizontalAlignment="Stretch"
           HorizontalContentAlignment="Stretch"
           AutomationProperties.HelpText="{Binding StatusDetail}"
           AutomationProperties.Name="{Binding StatusTitle}"
-          Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-          BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
           Command="{Binding OpenStatusPageCommand}"
-          CornerRadius="{DynamicResource Brand.RadiusControl}">
+          Style="{StaticResource Settings.StatusChip}">
           <Grid>
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto" />
               <ColumnDefinition Width="*" />
+              <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
-            <Border x:Name="StatusTile" Width="36" Height="36" CornerRadius="18" VerticalAlignment="Center">
-              <Border.Style>
-                <Style TargetType="Border">
-                  <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+            <Ellipse Width="8" Height="8" Margin="2,0,10,0" VerticalAlignment="Center">
+              <Ellipse.Style>
+                <Style TargetType="Ellipse">
+                  <Setter Property="Fill" Value="{DynamicResource Brand.SuccessBrush}" />
                   <Style.Triggers>
-                    <DataTrigger Binding="{Binding StatusTone}" Value="Ready">
-                      <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                    <DataTrigger Binding="{Binding StatusTone}" Value="Armed">
+                      <Setter Property="Fill" Value="{DynamicResource Brand.MarkBrush}" />
                     </DataTrigger>
                     <DataTrigger Binding="{Binding StatusTone}" Value="Busy">
-                      <Setter Property="Background" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                      <Setter Property="Fill" Value="{DynamicResource Brand.AccentBrush}" />
                     </DataTrigger>
-                    <DataTrigger Binding="{Binding StatusTone}" Value="Armed">
-                      <Setter Property="Background" Value="{DynamicResource Brand.HighlightFillBrush}" />
+                    <DataTrigger Binding="{Binding StatusTone}" Value="Paused">
+                      <Setter Property="Fill" Value="{DynamicResource Brand.WarningBrush}" />
+                    </DataTrigger>
+                    <DataTrigger Binding="{Binding StatusTone}" Value="Off">
+                      <Setter Property="Fill" Value="{DynamicResource Brand.Text3Brush}" />
                     </DataTrigger>
                     <DataTrigger Binding="{Binding StatusTone}" Value="Attention">
-                      <Setter Property="Background" Value="{DynamicResource SystemFillColorCautionBackgroundBrush}" />
+                      <Setter Property="Fill" Value="{DynamicResource Brand.DangerBrush}" />
                     </DataTrigger>
                   </Style.Triggers>
                 </Style>
-              </Border.Style>
-              <ui:SymbolIcon FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <ui:SymbolIcon.Style>
-                  <Style TargetType="ui:SymbolIcon">
-                    <Setter Property="Symbol" Value="Checkmark24" />
-                    <Setter Property="Foreground" Value="{DynamicResource TextOnAccentFillColorPrimaryBrush}" />
-                    <Style.Triggers>
-                      <DataTrigger Binding="{Binding StatusTone}" Value="Busy">
-                        <Setter Property="Symbol" Value="ArrowSync24" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding StatusTone}" Value="Armed">
-                        <Setter Property="Symbol" Value="ClipboardPaste24" />
-                        <Setter Property="Foreground" Value="{DynamicResource Brand.HighlightTextBrush}" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding StatusTone}" Value="Paused">
-                        <Setter Property="Symbol" Value="Pause24" />
-                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding StatusTone}" Value="Off">
-                        <Setter Property="Symbol" Value="Power24" />
-                        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
-                      </DataTrigger>
-                      <DataTrigger Binding="{Binding StatusTone}" Value="Attention">
-                        <Setter Property="Symbol" Value="Warning24" />
-                        <Setter Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                      </DataTrigger>
-                    </Style.Triggers>
-                  </Style>
-                </ui:SymbolIcon.Style>
-              </ui:SymbolIcon>
-            </Border>
-            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+              </Ellipse.Style>
+            </Ellipse>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
               <TextBlock
-                FontSize="{DynamicResource Brand.SizeBody}"
+                FontSize="13"
                 FontWeight="SemiBold"
                 Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                 Text="{Binding StatusTitle}"
@@ -141,9 +126,16 @@
                 TextTrimming="CharacterEllipsis"
                 TextWrapping="NoWrap" />
             </StackPanel>
+            <ui:SymbolIcon
+              Grid.Column="2"
+              Margin="8,0,0,0"
+              VerticalAlignment="Center"
+              FontSize="14"
+              Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+              Symbol="ChevronRight20" />
           </Grid>
-        </ui:Button>
-      </ui:NavigationView.PaneHeader>
+        </Button>
+      </ui:NavigationView.PaneFooter>
 
       <ui:NavigationView.MenuItems>
         <ui:NavigationViewItem Content="General" Icon="{ui:SymbolIcon Settings24}" TargetPageType="{x:Type pages:GeneralPage}" />
@@ -154,6 +146,16 @@
         <ui:NavigationViewItem Content="About" Icon="{ui:SymbolIcon Info24}" TargetPageType="{x:Type pages:AboutPage}" />
       </ui:NavigationView.MenuItems>
     </ui:NavigationView>
+
+    <!-- A hairline between the sidebar and the page, full height. -->
+    <Rectangle
+      Grid.Row="0"
+      Grid.RowSpan="2"
+      Width="1"
+      Margin="240,0,0,0"
+      HorizontalAlignment="Left"
+      Fill="{DynamicResource Brand.BorderBrush}"
+      IsHitTestVisible="False" />
 
     <!-- Problems that aren't tied to one control, such as a settings file that couldn't be written. -->
     <ui:InfoBar

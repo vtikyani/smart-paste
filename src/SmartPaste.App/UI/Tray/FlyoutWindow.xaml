@@ -10,13 +10,14 @@
   Width="360"
   MinWidth="0"
   MinHeight="0"
+  Background="{DynamicResource ApplicationBackgroundBrush}"
   ExtendsContentIntoTitleBar="True"
   ResizeMode="NoResize"
   ShowInTaskbar="False"
   SizeToContent="Height"
   Topmost="True"
   UseLayoutRounding="True"
-  WindowBackdropType="Acrylic"
+  WindowBackdropType="None"
   WindowCornerPreference="Round"
   WindowStartupLocation="Manual">
 
@@ -45,10 +46,10 @@
       <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
 
-    <!-- A card on the acrylic: Windows 11's layered card with a hairline edge. -->
+    <!-- A quiet card on the background: surface-1 with a hairline edge. -->
     <Style x:Key="Card" TargetType="Border">
       <Setter Property="Margin" Value="12,0,12,12" />
-      <Setter Property="CornerRadius" Value="{StaticResource Brand.RadiusControl}" />
+      <Setter Property="CornerRadius" Value="{StaticResource Brand.RadiusCard}" />
       <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
       <Setter Property="BorderThickness" Value="1" />
@@ -70,7 +71,7 @@
               x:Name="Chrome"
               Padding="{TemplateBinding Padding}"
               Background="{TemplateBinding Background}"
-              CornerRadius="4">
+              CornerRadius="{StaticResource Brand.RadiusControl}">
               <ContentPresenter
                 HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
                 VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
@@ -547,8 +548,8 @@
                 Grid.Column="1"
                 Margin="12,0,0,0"
                 VerticalAlignment="Center"
-                Appearance="Primary"
                 Command="{Binding TurnOnCommand}"
+                Style="{StaticResource Brand.PrimaryButton}"
                 Content="Turn on" />
             </Grid>
           </Border>
