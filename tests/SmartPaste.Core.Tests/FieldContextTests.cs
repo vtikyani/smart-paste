@@ -66,11 +66,21 @@ public class FieldContextTests
         Assert.Equal("ZIP", Field(name: "ZIP").LearnableLabel());
         Assert.Equal("ZIP", (Field() with { Placeholder = "ZIP" }).LearnableLabel());
         Assert.Equal("ZIP", Field(siblings: ["ZIP"]).LearnableLabel());
-        Assert.Equal("ZIP", Field(ocr: "ZIP").LearnableLabel());
         // An id alone, or help text alone, is never learned.
         Assert.Null(Field(id: "shippingZip").LearnableLabel());
         Assert.Null(Field(help: "Five digits").LearnableLabel());
         Assert.Null(Field(id: "input-15").LearnableLabel());
+    }
+
+    [Fact]
+    public void OcrTextLabelsTheFieldButIsNeverLearned()
+    {
+        // OCR reads whatever is printed left of the field, which can be another field's value: "Jordan" must never
+        // be written to the label cache on disk.
+        var field = Field(ocr: "Jordan");
+        Assert.Equal("Jordan", field.BestLabel());
+        Assert.Null(field.LearnableLabel());
+        Assert.Null(Field(ocr: "ZIP").LearnableLabel());
     }
 
     [Fact]

@@ -13,6 +13,15 @@ public sealed class LabelCache
     // The built-in list, read once from the embedded resource and shared (read-only) by every instance.
     private static readonly Lazy<IReadOnlyDictionary<string, string>> BuiltIn = new(LoadBuiltIn);
 
+    // One-word labels whose meaning depends on the form ("Name" is a company's name under "Company details"). Learned
+    // once, they would answer for every form offline.
+    private static readonly HashSet<string> VagueWords = new(StringComparer.Ordinal)
+    {
+        "name", "number", "no", "num", "code", "id", "address", "location", "date", "time", "phone", "email", "contact",
+        "value", "text", "field", "input", "entry", "answer", "response", "info", "information", "details", "other",
+        "type", "item", "data", "description", "comment", "comments", "note", "notes"
+    };
+
     private readonly object _gate = new();
     private readonly Dictionary<string, string> _seed = new(StringComparer.Ordinal);
     // Only learned labels are persisted, so a newer seed is never shadowed by an old copy of itself.
@@ -28,7 +37,9 @@ public sealed class LabelCache
             foreach (var (label, key) in BuiltIn.Value) _seed[label] = key;
         if (userFilePath is not null)
         {
-            try { Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(userFilePath)), _learned); }
+            // Entries saved by older versions that may no longer be learned (a copy of a built-in label, a vague
+            // word, a sensitive label) are ignored, and dropped from the file on its next save.
+            try { Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(userFilePath)), _learned, IsLearnable); }
             catch (IOException) { }
             catch (UnauthorizedAccessException) { }
             catch (JsonException) { }
@@ -72,12 +83,25 @@ public sealed class LabelCache
     internal static bool TryGetBuiltIn(string label, out string key) =>
         BuiltIn.Value.TryGetValue(LabelNormalizer.Normalize(label), out key!);
 
+    // Whether a label may be learned. Only labels that add something are: not one already in the built-in list (a
+    // learned copy would shadow later fixes to that list, and an answer that depended on the form, like a company's
+    // "Name", would stick to it), not a vague single word, not only digits, and never a sensitive label or one about
+    // someone else (such fields must never receive the user's values).
+    internal static bool IsLearnable(string label)
+    {
+        var normalized = LabelNormalizer.Normalize(label);
+        if (normalized.Length == 0 || BuiltIn.Value.ContainsKey(normalized) || normalized.All(c => char.IsDigit(c) || c == ' '))
+            return false;
+        if (!normalized.Contains(' ', StringComparison.Ordinal) && VagueWords.Contains(normalized)) return false;
+        return !KeywordRules.IsSensitive(normalized) && !KeywordRules.IsAboutSomeoneElse(normalized);
+    }
+
     // Never throws: a cache write failing must not cost the user the paste it was learned from.
-    // Sensitive labels are never learned: such fields must never receive a value.
+    // Labels that may not be learned (see IsLearnable) are ignored.
     public void Set(string normalizedLabel, string key)
     {
         var label = LabelNormalizer.Normalize(normalizedLabel);
-        if (label.Length == 0 || !FieldKeys.Standard.Contains(key) || KeywordRules.IsSensitive(label)) return;
+        if (!FieldKeys.Standard.Contains(key) || !IsLearnable(label)) return;
         lock (_gate)
         {
             if (_learned.TryGetValue(label, out var existing) && existing == key) return;
@@ -133,18 +157,18 @@ public sealed class LabelCache
         using var stream = typeof(LabelCache).Assembly.GetManifestResourceStream("SmartPaste.Core.seed-labels.json")
             ?? throw new InvalidOperationException("Embedded seed labels missing.");
         var seed = new Dictionary<string, string>(StringComparer.Ordinal);
-        Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(stream), seed);
+        Overlay(JsonSerializer.Deserialize<Dictionary<string, string>>(stream), seed, _ => true);
         return seed;
     }
 
-    private static void Overlay(Dictionary<string, string>? entries, Dictionary<string, string> target)
+    private static void Overlay(Dictionary<string, string>? entries, Dictionary<string, string> target, Func<string, bool> accept)
     {
         if (entries is null) return;
         foreach (var (label, key) in entries)
             if (FieldKeys.Standard.Contains(key))
             {
                 var normalized = LabelNormalizer.Normalize(label);
-                if (normalized.Length > 0) target[normalized] = key;
+                if (normalized.Length > 0 && accept(normalized)) target[normalized] = key;
             }
     }
 }

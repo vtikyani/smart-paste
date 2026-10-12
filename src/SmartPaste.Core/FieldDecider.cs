@@ -73,6 +73,10 @@ public sealed class FieldDecider
         ("company", ["company", "employer", "organization", "organisation", "business"])
     ];
 
+    // A value at least this long counts inside a longer label too ("Hi Jordan Rivera"); shorter ones ("NJ", "4")
+    // are too common as words.
+    private const int ValueInLabelMinLength = 3;
+
     private readonly LabelCache _cache;
     private readonly IJevChooser? _jev;
     private readonly bool _useLocalRules;
@@ -111,7 +115,7 @@ public sealed class FieldDecider
             try
             {
                 var choice = await _jev.ChooseAsync(question, jevDeadline, ct).ConfigureAwait(false);
-                return FromJev(choice, question, field);
+                return FromJev(choice, question, field, profile);
             }
             catch (ServiceException ex)
             {
@@ -123,12 +127,23 @@ public sealed class FieldDecider
         return fallback with { JevFailure = failure };
     }
 
-    // The user chose a value in the picker: remember the label so the offline fallback knows it next time.
+    // The user chose a value in the picker: remember the label so the offline fallback knows it next time. Without
+    // the profile only the chosen value is kept from being learned as a label; prefer the overload with the profile.
     public void LearnChoice(FieldContext field, Candidate chosen)
     {
         ArgumentNullException.ThrowIfNull(field);
         ArgumentNullException.ThrowIfNull(chosen);
-        Learn(field, chosen.Key);
+        Learn(field, chosen.Key, [chosen.Value]);
+    }
+
+    // As above. A label that matches any value of the armed block (a name shown next to the field) is never learned,
+    // because the label cache is saved to disk.
+    public void LearnChoice(FieldContext field, Candidate chosen, Profile profile)
+    {
+        ArgumentNullException.ThrowIfNull(field);
+        ArgumentNullException.ThrowIfNull(chosen);
+        ArgumentNullException.ThrowIfNull(profile);
+        Learn(field, chosen.Key, AllValues(profile).Append(chosen.Value));
     }
 
     // Every distinct value of the block, standard keys first, formatted for the field when one is given.
@@ -143,7 +158,7 @@ public sealed class FieldDecider
         return candidates;
     }
 
-    private Decision FromJev(JevChoice choice, JevQuestion question, FieldContext field)
+    private Decision FromJev(JevChoice choice, JevQuestion question, FieldContext field, Profile profile)
     {
         if (choice.Confidence >= ConfidenceFloor)
         {
@@ -151,7 +166,7 @@ public sealed class FieldDecider
             if (question.Option(choice.Choice)?.Candidate is { } picked)
             {
                 var value = Formatted(picked, field);
-                Learn(field, value.Key);
+                Learn(field, value.Key, AllValues(profile).Append(value.Value));
                 return new Decision(DecisionKind.Value, value.Key, value.Value, [value], "jev", DecisionReasons.Matched)
                 {
                     DecidedBy = DecisionSource.Jev,
@@ -219,11 +234,28 @@ public sealed class FieldDecider
             .Concat(field.Siblings).Concat(field.Sections)
             .Any(text => !string.IsNullOrWhiteSpace(text) && KeywordRules.IsAboutSomeoneElse(text!));
 
-    private void Learn(FieldContext field, string key)
+    // Only text the app labels the field with is learned (never an id, help text, or OCR), never one of the block's
+    // values, never from a field that is sensitive by its context, and only labels the cache accepts (not built in,
+    // not vague, not sensitive; see LabelCache.IsLearnable).
+    private void Learn(FieldContext field, string key, IEnumerable<string> values)
     {
-        // Only text a person reads next to the field is learned, never an automation id.
-        if (field.LearnableLabel() is { } label) _cache.Set(label, key);
+        if (field.LearnableLabel() is { } label && !IsOneOfTheValues(label, values) && !KeywordRules.IsSensitive(field))
+            _cache.Set(label, key);
     }
+
+    private static bool IsOneOfTheValues(string label, IEnumerable<string> values)
+    {
+        var text = LabelNormalizer.Normalize(label);
+        foreach (var value in values)
+        {
+            var normalized = LabelNormalizer.Normalize(value);
+            if (normalized.Length == 0) continue;
+            if (normalized == text || (normalized.Length >= ValueInLabelMinLength && Has(text, normalized))) return true;
+        }
+        return false;
+    }
+
+    private static IEnumerable<string> AllValues(Profile profile) => profile.Entities.SelectMany(e => e.Fields.Values);
 
     private static Candidate Formatted(Candidate candidate, FieldContext field) =>
         candidate with { Value = ValueFormatter.Format(candidate.Key, candidate.Value, field) };

@@ -441,6 +441,75 @@ public class FieldDeciderTests
         var field = new FieldContext(null, null, "input-15", null, "Edit", false, ["Postal / ZIP"]);
         new FieldDecider(cache, null).LearnChoice(field, new Candidate(FieldKeys.Zip, "person", "07081"));
         Assert.Equal([new LearnedLabel("postal zip", FieldKeys.Zip)], cache.Learned);
+
+        // The overload with the profile learns the same way.
+        var other = new FieldContext(null, null, "input-16", null, "Edit", false, ["Your postal area"]);
+        new FieldDecider(cache, null).LearnChoice(other, new Candidate(FieldKeys.Zip, "person", "07081"), Profile(Person));
+        Assert.Equal(FieldKeys.Zip, cache.Learned.Single(l => l.Label == "your postal area").Key);
+    }
+
+    [Fact]
+    public async Task OcrLabelsAreNeverLearned()
+    {
+        // OCR read "Jordan", another field's value printed left of this unlabeled field.
+        var cache = LabelCache.Empty();
+        var field = new FieldContext(null, null, null, null, "Edit", false, [], OcrText: "Jordan");
+        var jev = new FakeJev(_ => Pick(FieldKeys.FirstName, 0.95, (FieldKeys.FirstName, 0.96)));
+        var decision = await new FieldDecider(cache, jev).DecideAsync(field, Profile(Person), CancellationToken.None);
+        Assert.Equal("Jordan", decision.Value);
+        new FieldDecider(cache, null).LearnChoice(field, new Candidate(FieldKeys.FirstName, "person", "Jordan"), Profile(Person));
+        Assert.Empty(cache.Learned);
+    }
+
+    [Fact]
+    public async Task LabelsThatAreTheBlocksValuesAreNeverLearned()
+    {
+        var cache = LabelCache.Empty();
+        // Nearby text that is the user's own last name and email, next to unlabeled fields.
+        var nearName = new FieldContext(null, null, null, null, "Edit", false, ["Rivera"]);
+        var nearEmail = new FieldContext(null, null, null, null, "Edit", false, ["Signed in as v@example.com"]);
+        new FieldDecider(cache, null).LearnChoice(nearName, new Candidate(FieldKeys.LastName, "person", "Rivera"), Profile(Person));
+        new FieldDecider(cache, null).LearnChoice(nearEmail, new Candidate(FieldKeys.FirstName, "person", "Jordan"), Profile(Person));
+        // Without the profile, the chosen value itself is still kept out.
+        new FieldDecider(cache, null).LearnChoice(nearName, new Candidate(FieldKeys.LastName, "person", "Rivera"));
+        // Jev's confident answers too.
+        var jev = new FakeJev(_ => Pick(FieldKeys.LastName, 0.95, (FieldKeys.LastName, 0.96)));
+        await new FieldDecider(cache, jev).DecideAsync(nearName, Profile(Person), CancellationToken.None);
+        Assert.Empty(cache.Learned);
+    }
+
+    [Fact]
+    public void AFieldThatIsSensitiveByItsContextTeachesNothing()
+    {
+        // The picker shortcut works in any field; a pick in a card field must not teach its label.
+        var cache = LabelCache.Empty();
+        var field = new FieldContext("Holder", null, null, null, "Edit", false, []) { Sections = ["Credit card"] };
+        Assert.True(LabelCache.IsLearnable("Holder")); // the label alone would be learned
+        new FieldDecider(cache, null).LearnChoice(field, new Candidate(FieldKeys.FullName, "person", "Jordan Rivera"), Profile(Person));
+        Assert.Empty(cache.Learned);
+    }
+
+    [Fact]
+    public async Task JevAnswersThatDependOnTheFormOrAgreeWithTheBuiltInListAreNotLearned()
+    {
+        var company = Profile(Person, new Entity("company", new Dictionary<string, string> { [FieldKeys.Company] = "Acme Corp" }));
+        var cache = new LabelCache(null);
+        var jev = new FakeJev(question => Pick(question.Options.First(o => o.Candidate?.Key == FieldKeys.Company).Name, 0.95,
+            (question.Options.First(o => o.Candidate?.Key == FieldKeys.Company).Name, 0.96)));
+        // "Name" under "Company details" is the company's name: right here, wrong on the next form.
+        var decision = await new FieldDecider(cache, jev).DecideAsync(Field("Name") with { Sections = ["Company details"] }, company, CancellationToken.None);
+        Assert.Equal("Acme Corp", decision.Value);
+        Assert.Empty(cache.Learned);
+        // A later offline "Name" is still the person's full name, from the built-in list.
+        Assert.True(cache.TryGet("name", out var key, out var learned) && !learned && key == FieldKeys.FullName);
+
+        // An answer that agrees with the built-in list adds nothing.
+        var agrees = new FakeJev(_ => Pick(FieldKeys.FirstName, 0.95, (FieldKeys.FirstName, 0.96)));
+        await new FieldDecider(cache, agrees).DecideAsync(Field("First name"), Profile(Person), CancellationToken.None);
+        // A vague one-word label could mean anything on the next form.
+        var vague = new FakeJev(_ => Pick(FieldKeys.Zip, 0.95, (FieldKeys.Zip, 0.96)));
+        await new FieldDecider(cache, vague).DecideAsync(Field("Code"), Profile(Person), CancellationToken.None);
+        Assert.Empty(cache.Learned);
     }
 
     // ---- Picker shortcut ----

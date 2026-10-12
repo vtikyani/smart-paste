@@ -32,9 +32,10 @@ public sealed record FieldContext(
     // like words, so a generated id never hides the visible label next to the field.
     public string BestLabel() => PickLabel().Text;
 
-    // The label the label cache may learn from: the best label, but only when it is text a person reads on screen
-    // (labeled-by element, accessible name, placeholder, nearby text, or OCR). Null when the best label is help
-    // text or an automation id, so the cache never learns from ids.
+    // The label the label cache may learn from: the best label, but only when it is text the app itself labels the
+    // field with (labeled-by element, accessible name, placeholder, nearby text). Null when the best label is help
+    // text, an automation id, or OCR: OCR reads whatever is printed left of the field, which can be another field's
+    // value (the user's name), and the cache is saved to disk.
     public string? LearnableLabel()
     {
         var (text, readable) = PickLabel();
@@ -87,7 +88,7 @@ public sealed record FieldContext(
         var sources = new (string? Text, bool Readable)[]
         {
             (LabeledBy, true), (Name, true), (Placeholder, true), (HelpText, false), (MeaningfulAutomationId, false),
-            (Siblings.LastOrDefault(Usable), true), (OcrText, true)
+            (Siblings.LastOrDefault(Usable), true), (OcrText, false)
         };
         foreach (var (text, readable) in sources)
             if (Usable(text)) return (text!.Trim(), readable);
