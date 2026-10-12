@@ -103,7 +103,8 @@ value that field wants. **Jev**, TypeSafe's decision model, makes that choice on
 
 The picker never takes focus from the target app. It is a non-activating window; keys reach it through
 `IKeyCapture` on the keyboard hook. In a picker that Ctrl+V opened, Escape pastes the clipboard as it is; in the
-Win+Alt+V picker, Escape only closes it.
+Win+Alt+V picker, Escape only closes it. The Win+Alt+V shortcut arrives as a hot key, not through the hook, so it asks
+the hook to hold keys the same way (`KeyboardHook.HoldKeysAsync`): a Tab typed right after picking waits for the value.
 
 ### Learning
 

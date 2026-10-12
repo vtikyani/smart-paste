@@ -160,6 +160,22 @@ internal static class Program
                 Expect("wpf-shortcut", "a copied value was pasted", value is { Length: > 0 } && MainBlock.Contains(value, StringComparison.Ordinal) ? "yes" : value, "yes");
             }
         }
+
+        // A Tab typed right after picking waits for the value, so the value still lands in the field the picker was
+        // opened for, and the next field gets nothing.
+        form.Clear();
+        if (Prepare(form.Handle, Field("e2e-2")))
+        {
+            Native.Chord(Native.VkLWin, Native.VkMenu, Native.VkV);
+            if (WaitForPicker(app.ProcessId) != IntPtr.Zero)
+            {
+                Native.Tap(0x31); // "1"
+                Native.Tap(Native.VkTab);
+                var value = WaitForValue(Field("e2e-2"), "");
+                Expect("wpf-shortcut", "Tab right after picking waits for the value", value is { Length: > 0 } && MainBlock.Contains(value, StringComparison.Ordinal) ? "yes" : value, "yes");
+                Expect("wpf-shortcut", "the next field stays empty", Automation.Value(Field("e2e-3")), "");
+            }
+        }
     }
 
     private static void RunWin32()
