@@ -81,7 +81,7 @@ public class ProfileParserTests
     }
 
     [Fact]
-    public void MergeFillsGapsFromTheLocalProfile()
+    public void MergeFillsGapsOnlyWithSureLocalValues()
     {
         var llm = ProfileParser.Parse("{\"entities\":[{\"label\":\"person\",\"fields\":{\"email\":\"a@b.com\",\"city\":\"Springfield\"}},{\"label\":\"shipping address\",\"fields\":{\"street\":\"2 Oak Ave\"}}]}", Now);
         var local = new Profile(
@@ -96,7 +96,43 @@ public class ProfileParserTests
         Assert.Equal("Springfield", merged.ValuesFor(FieldKeys.City).Single().Value);
         var person = merged.Entities.Single(e => e.Label == "person");
         Assert.Equal("201-555-0100", person.Fields[FieldKeys.Phone]);
-        Assert.Equal("Jordan", person.Fields[FieldKeys.FirstName]);
-        Assert.Equal("Apt 4B", merged.Entities.Single(e => e.Label == "billing address").Fields[FieldKeys.Unit]);
+        // A name, a unit, and a city are local guesses: the model's reading is not added to with them.
+        Assert.Empty(merged.ValuesFor(FieldKeys.FullName));
+        Assert.Empty(merged.ValuesFor(FieldKeys.Unit));
+        Assert.DoesNotContain(merged.Entities, e => e.Label == "billing address");
+    }
+
+    [Fact]
+    public void LocalNoiseDoesNotSurviveAGoodParse()
+    {
+        var llm = ProfileParser.Parse("{\"entities\":[{\"label\":\"person\",\"fields\":{\"full_name\":\"Jordan Rivera\",\"street\":\"2 Oak Ave\"}}]}", Now);
+        var local = new Profile(
+        [
+            new Entity("person", new Dictionary<string, string>
+            {
+                [FieldKeys.FullName] = "Ship To", [FieldKeys.Zip] = "12345", [FieldKeys.Street] = "12345 Main St",
+                [FieldKeys.Website] = "https://example.com/spec", [FieldKeys.Email] = "jordan@example.com"
+            }),
+            new Entity("work", new Dictionary<string, string> { [FieldKeys.Phone] = "2015550100" })
+        ], Now);
+
+        var merged = ProfileParser.Merge(llm, local);
+        Assert.Equal("Jordan Rivera", merged.ValuesFor(FieldKeys.FullName).Single().Value);
+        Assert.Equal("2 Oak Ave", merged.ValuesFor(FieldKeys.Street).Single().Value);
+        Assert.Equal("jordan@example.com", merged.ValuesFor(FieldKeys.Email).Single().Value);
+        Assert.Empty(merged.ValuesFor(FieldKeys.Zip));
+        Assert.Empty(merged.ValuesFor(FieldKeys.Website));
+        // A bare run of digits is not sure to be a phone number.
+        Assert.Empty(merged.ValuesFor(FieldKeys.Phone));
+    }
+
+    [Fact]
+    public void AnEmptyReplyLeavesTheLocalResult()
+    {
+        var local = new Profile([new Entity("person", new Dictionary<string, string> { [FieldKeys.Street] = "123 Main St", [FieldKeys.Zip] = "07081" })], Now.AddSeconds(-1));
+        var merged = ProfileParser.Merge(new Profile([], Now), local);
+        Assert.Equal(Now, merged.CreatedAt);
+        Assert.Equal("123 Main St", merged.ValuesFor(FieldKeys.Street).Single().Value);
+        Assert.Equal("07081", merged.ValuesFor(FieldKeys.Zip).Single().Value);
     }
 }

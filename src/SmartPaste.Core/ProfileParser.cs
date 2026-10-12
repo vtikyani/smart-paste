@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SmartPaste.Core;
 
@@ -36,19 +37,23 @@ public static class ProfileParser
 
     public static Profile Merge(Profile llm, FastFields f) => Merge(llm, FromFastFields(f, llm.CreatedAt));
 
-    // The model's result first; the local result fills only keys the model left out. Local values go to the entity
-    // with the same label, then to the model's first entity for the person's own details, else to a new entity.
+    // The model's result first. The local result fills only keys the model left out, and only with values whose shape
+    // alone says what they are: an email address, or a phone number written like one. The local guesses (a name from a
+    // first line, a street, a ZIP code) never add to a model's reading. Local values go to the entity with the same
+    // label, then to the model's first entity for the person's own details, else to a new entity. A reply with no
+    // usable value is no reading at all, so the local result stands.
     public static Profile Merge(Profile llm, Profile local)
     {
         ArgumentNullException.ThrowIfNull(llm);
         ArgumentNullException.ThrowIfNull(local);
+        if (llm.Keys.Count == 0) return new Profile(local.Entities, llm.CreatedAt);
         var entities = llm.Entities
             .Select(e => (e.Label, Fields: new Dictionary<string, string>(e.Fields, StringComparer.Ordinal)))
             .ToList();
         var llmKeys = new HashSet<string>(llm.Keys, StringComparer.Ordinal);
         foreach (var entity in local.Entities)
         {
-            var missing = entity.Fields.Where(f => !llmKeys.Contains(f.Key)).ToArray();
+            var missing = entity.Fields.Where(f => !llmKeys.Contains(f.Key) && IsSure(f.Key, f.Value)).ToArray();
             if (missing.Length == 0) continue;
             var target = entities.FindIndex(e => e.Label.Equals(entity.Label, StringComparison.OrdinalIgnoreCase));
             if (target < 0 && entity.Label.Equals("person", StringComparison.OrdinalIgnoreCase) && entities.Count > 0) target = 0;
@@ -60,6 +65,23 @@ public static class ProfileParser
             foreach (var (key, value) in missing) entities[target].Fields.TryAdd(key, value);
         }
         return Build(entities.Select(e => new Entity(e.Label, e.Fields)), llm.CreatedAt);
+    }
+
+    private static bool IsSure(string key, string value)
+    {
+        try
+        {
+            return key switch
+            {
+                FieldKeys.Email => TextHeuristics.IsEmail(value),
+                FieldKeys.Phone => TextHeuristics.IsWrittenPhone(value),
+                _ => false
+            };
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 
     // The entities as the model wrote them, keys normalized, before names are derived.
