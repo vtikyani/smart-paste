@@ -62,6 +62,65 @@ public class ProfileGroundingTests
         Assert.True(grounding.IsGrounded(FieldKeys.Company, "maine street partners"));
     }
 
+    private static readonly ProfileGrounding Card = new(
+        "Jordan Rivera, jordan@example.com, 201-555-0100, https://jrivera.dev/about, " +
+        "https://www.linkedin.com/in/jrivera?trk=abc, Springfield, N.J. 07081, Montréal, José Martínez");
+
+    [Theory]
+    [InlineData(FieldKeys.Email, "jordan@example.co")]
+    [InlineData(FieldKeys.Email, "ordan@example.com")]
+    [InlineData(FieldKeys.Email, "example.com")]
+    [InlineData(FieldKeys.Phone, "201-555-010")]
+    [InlineData(FieldKeys.Phone, "01-555-0100")]
+    [InlineData(FieldKeys.Phone, "201 555")]
+    [InlineData(FieldKeys.Zip, "55501")]
+    [InlineData(FieldKeys.Zip, "0708")]
+    [InlineData(FieldKeys.Website, "jrivera.de")]
+    [InlineData(FieldKeys.Website, "rivera.dev")]
+    [InlineData(FieldKeys.Website, "example.com")]
+    [InlineData(FieldKeys.Linkedin, "linkedin.com/in/jriver")]
+    [InlineData(FieldKeys.City, "Montr")]
+    [InlineData(FieldKeys.LastName, "Rive")]
+    public void PiecesOfAValueAreNotGrounded(string key, string value) =>
+        Assert.False(Card.IsGrounded(key, value), $"{key}={value}");
+
+    [Theory]
+    [InlineData(FieldKeys.Email, "Jordan@Example.com")]
+    [InlineData(FieldKeys.Phone, "(201) 555-0100")]
+    [InlineData(FieldKeys.Phone, "+1 201 555 0100")]
+    [InlineData(FieldKeys.Zip, "07081")]
+    [InlineData(FieldKeys.State, "NJ")]
+    [InlineData(FieldKeys.State, "N.J.")]
+    [InlineData(FieldKeys.State, "New Jersey")]
+    [InlineData(FieldKeys.City, "Montreal")]
+    [InlineData(FieldKeys.City, "Montréal")]
+    [InlineData(FieldKeys.FirstName, "Jose")]
+    [InlineData(FieldKeys.LastName, "Martínez")]
+    [InlineData(FieldKeys.Website, "jrivera.dev")]
+    [InlineData(FieldKeys.Website, "https://jrivera.dev/about")]
+    [InlineData(FieldKeys.Linkedin, "linkedin.com/in/jrivera")]
+    [InlineData(FieldKeys.Linkedin, "https://www.linkedin.com/in/jrivera")]
+    public void WholeValuesAreGrounded(string key, string value) =>
+        Assert.True(Card.IsGrounded(key, value), $"{key}={value}");
+
+    [Fact]
+    public void NumbersSideBySideAreEachGrounded()
+    {
+        var grounding = new ProfileGrounding("Phone: 201-555-0100 201-555-0199, ZIP 07081-1234");
+        Assert.True(grounding.IsGrounded(FieldKeys.Phone, "201-555-0100"));
+        Assert.True(grounding.IsGrounded(FieldKeys.Phone, "201.555.0199"));
+        Assert.True(grounding.IsGrounded(FieldKeys.Zip, "07081-1234"));
+        Assert.False(grounding.IsGrounded(FieldKeys.Phone, "0100201-5550"));
+    }
+
+    [Fact]
+    public void BrokenUnicodeStillGrounds()
+    {
+        var grounding = new ProfileGrounding("\uD800 Jordan Rivera, jordan@example.com");
+        Assert.True(grounding.IsGrounded(FieldKeys.FullName, "Jordan Rivera"));
+        Assert.True(grounding.IsGrounded(FieldKeys.Email, "jordan@example.com"));
+    }
+
     [Fact]
     public void GroundKeepsOnlyGroundedFields()
     {

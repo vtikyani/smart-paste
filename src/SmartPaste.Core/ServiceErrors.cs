@@ -140,9 +140,10 @@ internal static class ServiceHttp
         {
             document = JsonDocument.Parse(body ?? "");
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
-            // The parser's message can quote the body, so it is not kept.
+            // Not JSON, or text that is not valid UTF-16 (ArgumentException). The parser's message can quote the body,
+            // so it is not kept.
             throw new ServiceException(ServiceFailure.BadResponse);
         }
 
@@ -163,17 +164,9 @@ internal static class ServiceHttp
     }
 
     // The failure an error envelope names, or null when the body is not one. Some services answer HTTP 200 with
-    // {"error":{"code":402,"message":"..."}}: the code maps like an HTTP status (401/403 rejected key, 402 no
-    // credits, 429 rate limited); an envelope without a usable code is BadResponse.
-    public static ServiceException? ErrorIn(JsonElement root)
-    {
-        if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("error", out var error) ||
-            error.ValueKind != JsonValueKind.Object)
-            return null;
-        return (Code(error, "code") ?? Code(error, "status")) is { } status
-            ? new ServiceException(ServiceException.FailureForStatus(status), status)
-            : new ServiceException(ServiceFailure.BadResponse);
-    }
+    // {"error":{"code":402,"message":"..."}} (see Envelope). Never throws, whatever the body holds.
+    public static ServiceException? ErrorIn(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object && root.TryGetProperty("error", out var error) ? Envelope(error) : null;
 
     // As above, for a body whose content is otherwise not needed (a key check). Null when it is not JSON.
     public static ServiceException? ErrorIn(string body)
@@ -183,10 +176,22 @@ internal static class ServiceHttp
             using var document = JsonDocument.Parse(body ?? "");
             return ErrorIn(document.RootElement);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or ArgumentException)
         {
             return null;
         }
+    }
+
+    // The failure one "error" object names, wherever it sits in a reply: its code maps like an HTTP status (401/403
+    // rejected key, 402 no credits, 429 rate limited, 5xx the service's own trouble), and an object without a usable
+    // code is BadResponse. Null for anything that is not an object ("error": null beside a normal reply is no error).
+    // Never throws, whatever the element holds.
+    public static ServiceException? Envelope(JsonElement error)
+    {
+        if (error.ValueKind != JsonValueKind.Object) return null;
+        return (Code(error, "code") ?? Code(error, "status")) is { } status
+            ? new ServiceException(ServiceException.FailureForStatus(status), status)
+            : new ServiceException(ServiceFailure.BadResponse);
     }
 
     // An HTTP-like status code (100 to 599), as a number or a numeric string.
@@ -196,10 +201,24 @@ internal static class ServiceHttp
         var code = value.ValueKind switch
         {
             JsonValueKind.Number when value.TryGetInt32(out var number) => number,
-            JsonValueKind.String when int.TryParse(value.GetString(), NumberStyles.None, CultureInfo.InvariantCulture, out var number) => number,
+            JsonValueKind.String when int.TryParse(Text(value), NumberStyles.None, CultureInfo.InvariantCulture, out var number) => number,
             _ => (int?)null
         };
         return code is >= 100 and <= 599 ? code : null;
+    }
+
+    // A string element's text, or null when its escapes do not make valid text (a lone "\ud800"), which GetString
+    // reports by throwing.
+    private static string? Text(JsonElement value)
+    {
+        try
+        {
+            return value.GetString();
+        }
+        catch (InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     // The body as text. An unknown charset in Content-Type makes ReadAsStringAsync throw InvalidOperationException:

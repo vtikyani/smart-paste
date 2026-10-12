@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace SmartPaste.Core;
 
@@ -10,7 +11,8 @@ public static class ProfileParser
     public static Profile Parse(string llmContent, DateTimeOffset now) => Build(ParseEntities(llmContent), now);
 
     // Like Parse, but values that do not appear in the source text are dropped (see ProfileGrounding). Grounding runs
-    // before names are derived, so a full name built from a grounded first and last name stays.
+    // before names are derived, so a full name built from a grounded first and last name stays. Like every profile
+    // built here, it never holds a secret (see WithoutSecrets).
     public static Profile ParseGrounded(string llmContent, string sourceText, DateTimeOffset now)
     {
         var grounding = new ProfileGrounding(sourceText);
@@ -35,19 +37,23 @@ public static class ProfileParser
 
     public static Profile Merge(Profile llm, FastFields f) => Merge(llm, FromFastFields(f, llm.CreatedAt));
 
-    // The model's result first; the local result fills only keys the model left out. Local values go to the entity
-    // with the same label, then to the model's first entity for the person's own details, else to a new entity.
+    // The model's result first. The local result fills only keys the model left out, and only with values whose shape
+    // alone says what they are: an email address, or a phone number written like one. The local guesses (a name from a
+    // first line, a street, a ZIP code) never add to a model's reading. Local values go to the entity with the same
+    // label, then to the model's first entity for the person's own details, else to a new entity. A reply with no
+    // usable value is no reading at all, so the local result stands.
     public static Profile Merge(Profile llm, Profile local)
     {
         ArgumentNullException.ThrowIfNull(llm);
         ArgumentNullException.ThrowIfNull(local);
+        if (llm.Keys.Count == 0) return new Profile(local.Entities, llm.CreatedAt);
         var entities = llm.Entities
             .Select(e => (e.Label, Fields: new Dictionary<string, string>(e.Fields, StringComparer.Ordinal)))
             .ToList();
         var llmKeys = new HashSet<string>(llm.Keys, StringComparer.Ordinal);
         foreach (var entity in local.Entities)
         {
-            var missing = entity.Fields.Where(f => !llmKeys.Contains(f.Key)).ToArray();
+            var missing = entity.Fields.Where(f => !llmKeys.Contains(f.Key) && IsSure(f.Key, f.Value)).ToArray();
             if (missing.Length == 0) continue;
             var target = entities.FindIndex(e => e.Label.Equals(entity.Label, StringComparison.OrdinalIgnoreCase));
             if (target < 0 && entity.Label.Equals("person", StringComparison.OrdinalIgnoreCase) && entities.Count > 0) target = 0;
@@ -59,6 +65,23 @@ public static class ProfileParser
             foreach (var (key, value) in missing) entities[target].Fields.TryAdd(key, value);
         }
         return Build(entities.Select(e => new Entity(e.Label, e.Fields)), llm.CreatedAt);
+    }
+
+    private static bool IsSure(string key, string value)
+    {
+        try
+        {
+            return key switch
+            {
+                FieldKeys.Email => TextHeuristics.IsEmail(value),
+                FieldKeys.Phone => TextHeuristics.IsWrittenPhone(value),
+                _ => false
+            };
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return false;
+        }
     }
 
     // The entities as the model wrote them, keys normalized, before names are derived.
@@ -112,15 +135,32 @@ public static class ProfileParser
             }
             return entities;
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
-            // The JSON parser's message can quote the reply, which can hold copied text, so it is not kept.
+            // Not JSON, or a string the reader cannot decode (an invalid escape such as a lone "\ud800"). The reader's
+            // message can quote the reply, which can hold copied text, so it is not kept.
             throw new FormatException("Model reply is not valid profile JSON.");
         }
     }
 
     private static Profile Build(IEnumerable<Entity> entities, DateTimeOffset now) =>
-        new(entities.Select(ProfileNormalizer.Normalize).Where(e => e.Fields.Count > 0).ToArray(), now);
+        new(entities.Select(WithoutSecrets).Select(ProfileNormalizer.Normalize).Where(e => e.Fields.Count > 0).ToArray(), now);
+
+    // Whatever a model returns, a profile keeps the standard keys and only those extra keys that do not name a secret
+    // ("account_number", "routing_number", "pin"), and no value that holds a card number, an SSN, or an IBAN. A phone
+    // number written with its country code ("+86 138 0013 8000") skips the card check: a long one can pass it.
+    private static Entity WithoutSecrets(Entity entity)
+    {
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (key, value) in entity.Fields)
+        {
+            if (!FieldKeys.Standard.Contains(key) && Redaction.IsSensitiveLabel(LabelNormalizer.Humanize(key))) continue;
+            var international = key == FieldKeys.Phone && value.TrimStart().StartsWith('+');
+            if (Redaction.HasSensitiveNumber(value, cards: !international)) continue;
+            fields[key] = value;
+        }
+        return fields.Count == entity.Fields.Count ? entity : new Entity(entity.Label, fields);
+    }
 
     private static string ExtractObject(string content)
     {

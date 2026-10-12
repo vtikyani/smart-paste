@@ -81,4 +81,50 @@ public class ServiceErrorTests
     [InlineData("[]")]
     [InlineData("not json")]
     public void OtherBodiesAreNotErrorEnvelopes(string body) => Assert.Null(ServiceHttp.ErrorIn(body));
+
+    // A code whose escape is not valid text ("\ud800") makes JsonElement.GetString throw; it is simply no usable code.
+    [Fact]
+    public void AnUndecodableCodeIsAnEnvelopeWithoutACode()
+    {
+        const string body = "{\"error\":{\"code\":\"\\ud800\"}}";
+        var error = ServiceHttp.ErrorIn(body);
+        Assert.NotNull(error);
+        Assert.Equal(ServiceFailure.BadResponse, error.Failure);
+        Assert.Null(error.StatusCode);
+        Assert.Equal(ServiceFailure.BadResponse,
+            Assert.Throws<ServiceException>(() => ServiceHttp.ReadJson(body, root => root.GetRawText())).Failure);
+    }
+
+    // A .NET string that is not valid UTF-16 (a lone surrogate) cannot even be parsed: that is an unusable body too.
+    [Fact]
+    public void TextThatIsNotValidUtf16IsABadResponse()
+    {
+        const string body = "{\"a\":\"\uD800\"}";
+        Assert.Equal(ServiceFailure.BadResponse,
+            Assert.Throws<ServiceException>(() => ServiceHttp.ReadJson(body, root => root.GetRawText())).Failure);
+        Assert.Null(ServiceHttp.ErrorIn(body));
+    }
+
+    [Theory]
+    [InlineData("{\"code\":503}", ServiceFailure.ServerError, 503)]
+    [InlineData("{\"code\":\"402\"}", ServiceFailure.PaymentRequired, 402)]
+    [InlineData("{\"message\":\"no code\"}", ServiceFailure.BadResponse, null)]
+    public void AnErrorObjectAnywhereMapsLikeAnHttpStatus(string json, ServiceFailure failure, int? status)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        var error = ServiceHttp.Envelope(document.RootElement);
+        Assert.NotNull(error);
+        Assert.Equal(failure, error.Failure);
+        Assert.Equal(status, error.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("null")]
+    [InlineData("false")]
+    [InlineData("\"a bare message\"")]
+    public void OnlyAnObjectIsAnErrorObject(string json)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(json);
+        Assert.Null(ServiceHttp.Envelope(document.RootElement));
+    }
 }
