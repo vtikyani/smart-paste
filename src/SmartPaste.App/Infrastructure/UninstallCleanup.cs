@@ -16,6 +16,10 @@ internal static class UninstallCleanup
         foreach (var file in new[] { AppPaths.SettingsFile, AppPaths.LabelCacheFile })
             if (File.Exists(file)) File.Delete(file);
         if (Directory.Exists(AppPaths.LogDirectory)) Directory.Delete(AppPaths.LogDirectory, recursive: true);
+        // The installer removes only its own folder, which is separate from the data folder, so the data folder goes
+        // here too. It is removed only when empty: nothing but Smart Paste's own files is ever deleted.
+        if (Directory.Exists(AppPaths.DataDirectory) && !Directory.EnumerateFileSystemEntries(AppPaths.DataDirectory).Any())
+            Directory.Delete(AppPaths.DataDirectory);
     }
 
     // Uninstall must finish even if one step fails (a file in use, a key already gone).
