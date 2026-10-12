@@ -1,0 +1,105 @@
+name: Release
+
+# Pushing a tag like v1.2.0 builds, tests, and publishes that version as a GitHub release.
+# docs/RELEASING.md walks through it.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+# Never cancel a release halfway through an upload; a second tag waits for the first.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write # create the release and upload its files
+    steps:
+      - name: Check out
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Read the version from the tag
+        id: version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          if ($env:TAG -notmatch '^v(\d+\.\d+\.\d+(-[0-9A-Za-z][0-9A-Za-z.-]*)?)$') {
+            throw "Tag '$env:TAG' is not a release tag like v1.2.0 or v1.3.0-beta.1."
+          }
+          $version = $Matches[1]
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "version=$version"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "prerelease=$($version.Contains('-').ToString().ToLowerInvariant())"
+
+      - name: Check the changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          $heading = '^## \[' + [regex]::Escape($env:VERSION) + '\]'
+          if (-not (Select-String -Path CHANGELOG.md -Pattern $heading -Quiet)) {
+            throw "CHANGELOG.md has no '## [$env:VERSION]' section. Add the release notes, then tag again."
+          }
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      # vpk builds a delta update (only the changed bytes) against the newest release already published.
+      # On the first release there is none, and vpk says so and carries on.
+      - name: Download the previous release
+        env:
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          foreach ($channel in 'win-x64', 'win-arm64') {
+            dotnet vpk download github --skip-updates --repoUrl $env:REPO_URL --channel $channel --outputDir artifacts/releases
+            if ($LASTEXITCODE -ne 0) { throw "Downloading the previous $channel release failed." }
+          }
+
+      - name: Test, publish, and pack
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./build/publish.ps1 -Version $env:VERSION -KeepPrevious
+
+      # The x64 upload creates a draft release. The arm64 upload adds its files and publishes the release, so
+      # nobody sees a release with half its files.
+      - name: Publish the GitHub release
+        env:
+          VPK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ steps.version.outputs.prerelease }}
+        run: |
+          $upload = @(
+            'vpk', 'upload', 'github', '--skip-updates',
+            '--repoUrl', $env:REPO_URL,
+            '--outputDir', 'artifacts/releases',
+            '--tag', $env:TAG,
+            '--releaseName', "Smart Paste $env:VERSION"
+          )
+          if ($env:PRERELEASE -eq 'true') { $upload += '--pre' }
+          dotnet @upload --channel win-x64
+          if ($LASTEXITCODE -ne 0) { throw 'Uploading the x64 files failed.' }
+          dotnet @upload --channel win-arm64 --merge --publish
+          if ($LASTEXITCODE -ne 0) { throw 'Uploading the arm64 files failed.' }

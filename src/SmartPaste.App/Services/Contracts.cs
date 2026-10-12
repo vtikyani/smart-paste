@@ -110,7 +110,8 @@ public interface IUpdateService
 
     Task<AvailableUpdate?> CheckAsync(CancellationToken ct);
 
-    Task DownloadAsync(AvailableUpdate update, IProgress<int>? progress, CancellationToken ct);
+    // True when the update is on disk and ready to install; false when the download failed (already logged).
+    Task<bool> DownloadAsync(AvailableUpdate update, IProgress<int>? progress, CancellationToken ct);
 
     // Exits the app, installs the downloaded update, and starts the new version.
     void ApplyAndRestart(AvailableUpdate update);

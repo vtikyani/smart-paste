@@ -1,77 +1,198 @@
-# Smart Paste
+<p align="center">
+  <img src="docs/images/logo.png" alt="Smart Paste" width="112">
+</p>
 
-Copy a block of text (a resume, an address, a contact card) or snip a screenshot. Then click into any
-form field and press **Ctrl+V**: Smart Paste pastes only the value that field wants (first name, zip,
-email...). **Ctrl+Shift+V** is never touched, so the app pastes your original clipboard.
+<h1 align="center">Smart Paste</h1>
 
-Windows 10/11, x64. Tray app, no window.
+<p align="center">Copy a whole block. Paste just the part each form field asks for.</p>
 
-**Status:** the core (parsing, label matching, value formatting, privacy rules) is covered by 60 unit tests, a
-label fixture, and a blind holdout of 46 unseen form labels (42/46 on first run). The Windows shell (keyboard hook, paste and
-clipboard restore, UI Automation labels in Chrome and Edge, OCR crop) has not been validated on real
-hardware yet.
+Smart Paste is a free, open-source app for Windows 10 and 11. It sits in the notification area (the system tray).
+Copy a block of text, like a resume, an address, or a contact card. Click into a form field and press **Ctrl+V**.
+Smart Paste pastes only the value that field wants: the first name, the ZIP code, the email.
+
+## How it works
+
+1. **Copy** a block of text with contact details.
+2. **Click** into a form field, in a website or a desktop app.
+3. **Press Ctrl+V.** The field gets just its value.
+
+**Jev**, TypeSafe's decision model, decides what gets pasted, every time. It looks at the field (its label, the
+text near it, and the section it sits in) and at the values you copied. Then it picks one, and says how sure it is.
+When it is not sure, a small picker opens next to the field, and you choose.
+
+Smart Paste asks Jev as soon as you click into a field. So the answer is usually ready before you press Ctrl+V.
+
+## Features
+
+- **Works where you fill in forms.** Websites in your browser and fields in desktop apps.
+- **Asks you when unsure.** A picker opens next to the field with the best choices.
+- **Every value at hand.** Press **Win+Alt+V** for a picker with everything you copied.
+- **Your original paste is one key away.** Smart Paste never touches **Ctrl+Shift+V**.
+- **A real paste.** **Ctrl+Z** undoes it, and your clipboard comes back right after.
+- **Works without a key.** A built-in list of common field labels, plus the labels it learns on your PC.
+- **Learned labels you can see.** A Settings page lists what it learned, and you can remove any of it.
+- **Field hints.** A small note next to the field shows what Ctrl+V will paste.
+- **Screenshots too, if you want.** It can read text in a copied screenshot with Windows' built-in, offline text
+  recognition (OCR). This is off until you turn it on.
+- **You stay in control.** Pause it, turn it off, or exclude apps where it should never step in.
+- **Modern Windows look.** Tray flyout, settings, and a welcome tour with a practice form. Light and dark.
+- **Updates itself.** New versions download in the background and install when you restart it.
+- **Private by design.** See [Privacy](#privacy).
 
 ## Install
 
-1. Install the .NET 10 Desktop Runtime (one time):
-   ```
-   winget install Microsoft.DotNet.DesktopRuntime.10
-   ```
-2. Publish the app (see Build below) and copy `dist/SmartPaste` anywhere (for example
-   `%LOCALAPPDATA%\Programs\SmartPaste`).
-3. Run `SmartPaste.App.exe`. A tray icon appears (gray = off, blue = on, green = a copied block is armed).
+Smart Paste runs on Windows 11, and on Windows 10 version 2004 or later.
 
-## Enter your API keys
+1. Open the [latest release](https://github.com/vtikyani/smart-paste/releases/latest).
+2. Download the installer for your PC:
+   - `SmartPaste.App-win-x64-Setup.exe` for most PCs (Intel or AMD).
+   - `SmartPaste.App-win-arm64-Setup.exe` for ARM PCs, like laptops with a Snapdragon chip.
+3. Run it. Smart Paste installs for your Windows account only, so it needs no admin rights.
+   It needs the .NET 10 Desktop Runtime (Microsoft's free app runtime). If that is missing, the installer offers to
+   install it from Microsoft first. Windows asks for admin permission for that one step.
 
-Right-click the tray icon, then **Settings...**.
+Smart Paste starts right away and shows the welcome tour. It also starts when you sign in to Windows. You can change
+that in Settings.
 
-- **OpenRouter key**: parses copied text and screenshots (model `anthropic/claude-haiku-4.5`).
-  Without it, only email, phone, and zip are recognized.
-- **TypeSafe key** (optional): Jev picks which value fits a field label it has not seen before.
-  When it is missing, Jev runs through your OpenRouter key instead.
+### "Windows protected your PC"
 
-Keys are stored in Windows Credential Manager (generic credentials `SmartPaste/OpenRouter` and
-`SmartPaste/TypeSafe`), never in a file. To remove them, open Credential Manager and delete those two
-entries.
+Releases are not code-signed yet. (A code signature is a certificate that proves who built a file.) So Windows
+SmartScreen may warn you the first time. Click **More info**, then **Run anyway**. Only do this for files you
+downloaded from this project's Releases page.
 
-## How it decides
+### Portable version
 
-1. At copy time the block is parsed once into a profile held in memory. The profile is cleared by the
-   next copy, or after 15 minutes.
-2. Ctrl+V is intercepted only while a profile is armed. The focused element must be a text box or combo
-   box; anything else (a document, an editor, a terminal) gets a normal paste.
-3. The field's label is read with UI Automation. If the field has no readable label, a small area left
-   of and above the caret is read with local OCR (PP-OCRv5; the models download on first use).
-4. The label is matched against a local cache (about 230 common labels plus what you have used). A miss
-   asks Jev. When two values fit (billing vs shipping) or Jev is unsure, a small picker appears: press
-   1-9, or Esc for a normal paste.
-5. The value is formatted for the field (NJ vs New Jersey, phone digits vs dashes, date formats) and
-   pasted as a real paste, so Ctrl+Z works. Your clipboard is restored right after, unless you copied
-   something new in the meantime.
+Prefer no installer? Download `SmartPaste.App-win-x64-Portable.zip` (or the `arm64` one) and unzip it into any
+folder you own. Run `Smart Paste.exe` in that folder. It updates itself in place.
 
-## What it never touches
+The portable version does not install the .NET runtime for you. Get the
+[.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) first. It also has no uninstaller; see
+[How do I uninstall it?](#how-do-i-uninstall-it)
 
-- Anything copied from 1Password, or any clipboard item that Windows marks private
-  (`ExcludeClipboardContentFromMonitorProcessing`, or history/cloud upload disabled): no parse, no
-  network, no log.
-- Password fields, fields labeled like passwords, card numbers, security codes, or SSNs, elevated
-  (admin) windows, Remote Desktop and Hyper-V windows, and 1Password itself.
-- When Smart Paste is off, it makes no network calls and does not watch the clipboard or keyboard.
+## First run
 
-Logs are in `%LOCALAPPDATA%\SmartPaste\logs` and hold event names, key names, reasons, and timings
-only, never clipboard contents or values. Learned labels are in
-`%LOCALAPPDATA%\SmartPaste\label-cache.json`.
+The welcome tour shows you around and lets you try Smart Paste on a practice form. Keys are optional:
 
-## Build (from macOS or Windows)
+- **No key.** Smart Paste matches fields with its built-in list of common labels, plus the labels it learns on your
+  PC.
+- **An OpenRouter key** (recommended). OpenRouter is a service that runs AI models. One key does two jobs: Claude
+  Haiku 5.5 reads your copied block, and Jev decides what each field gets. Get a key at
+  [openrouter.ai/keys](https://openrouter.ai/keys).
+- **A TypeSafe key** (optional). A direct route to Jev, from [TypeSafe](https://typesafe.ai).
 
+You can add, change, or remove keys later in Settings. Smart Paste keeps them in Windows Credential Manager, never in
+a file.
+
+## Keyboard shortcuts
+
+| Keys | What it does |
+| --- | --- |
+| **Ctrl+V** | While a copied block is ready: pastes the value this field wants. Otherwise: a normal paste. |
+| **Ctrl+Shift+V** | Smart Paste never handles it, so the app pastes your clipboard as usual. |
+| **Win+Alt+V** | Opens a picker with every value you copied. You can change this shortcut in Settings. |
+| **Esc** (in a picker) | Closes the picker and pastes your original clipboard instead. |
+| Your choice | Turns Smart Paste on or off. There is none until you set one in Settings. |
+
+## Privacy
+
+Smart Paste is built to keep what you copy on your PC.
+
+- **No key:** nothing you copy leaves your PC.
+- **With a key:** copied text that looks like contact details goes to OpenRouter to be read. While a copied block is
+  ready and you click into a field, the field's label and the text around it go to Jev, with your copied values cut
+  short. Nothing else you copy leaves your PC.
+- **No telemetry.** Smart Paste does not track how you use it.
+- **Memory only.** The copied block stays in memory and is forgotten after 15 minutes (you can change this).
+- **Logs never contain** what you copied, what was pasted, or field labels.
+- **Never touches** password fields, card numbers, security codes, social security numbers, one-time codes, admin
+  windows, Remote Desktop, terminals, or password managers.
+- **Uninstall removes everything:** keys, settings, learned labels, and logs.
+
+The full details are in [PRIVACY.md](PRIVACY.md).
+
+## Questions and troubleshooting
+
+### Ctrl+V pasted the whole block. Why?
+
+Smart Paste only steps in when all of these are true:
+
+- It is on and not paused.
+- The copied text looks like contact details: at least two kinds, like an email address and a phone number.
+- The block was copied less than 15 minutes ago, and you have not copied anything else since.
+- You are pasting into a text box or a drop-down you can type in.
+- The app is not one it skips (see below), and you have not excluded it in Settings.
+
+The tray icon shows when a copied block is ready.
+
+### A field got the wrong value
+
+Press **Ctrl+Z** to undo it. Then press **Win+Alt+V** and pick the right value. Smart Paste learns from the values
+you pick. If a learned label is wrong, remove it on the **Learned labels** page in Settings.
+
+### Does it work offline?
+
+Yes. Smart Paste reads the copied block on your PC first, and it matches fields with its built-in label list and the
+labels it learned. Jev and the cloud reader add better choices when you are online and have a key.
+
+### Which apps does it skip?
+
+Admin windows (apps you ran as administrator), Remote Desktop, terminals, password managers, and any app you exclude
+in Settings. In those, Ctrl+V works the normal way. Smart Paste also never fills password fields or fields for card
+numbers, security codes, social security numbers, or one-time codes.
+
+### Where are the logs?
+
+In `%LOCALAPPDATA%\SmartPaste\logs`. Paste that path into File Explorer's address bar. The logs record events and
+timings, never what you copied. They are deleted after 14 days. Attaching a few lines to a bug report helps a lot.
+
+### How do I uninstall it?
+
+Open Windows **Settings > Apps > Installed apps**, find **Smart Paste**, and choose **Uninstall**. This removes the
+app, your saved keys, settings, learned labels, logs, and the start-at-sign-in entry.
+
+For the portable version: in Smart Paste's settings, remove your keys and turn off starting at sign-in. Quit Smart
+Paste, then delete its folder and `%LOCALAPPDATA%\SmartPaste`.
+
+## Build from source
+
+You need Windows 10 or 11, the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0), and Git.
+
+```powershell
+git clone https://github.com/vtikyani/smart-paste.git
+cd smart-paste
+dotnet build SmartPaste.slnx
+dotnet test SmartPaste.slnx
 ```
-dotnet test tests/SmartPaste.Core.Tests
-dotnet publish src/SmartPaste.App -c Release -r win-x64 --self-contained false -o dist/SmartPaste
+
+To build the release files (Setup.exe, the portable zip, and update packages) into `artifacts/releases`, run this in
+PowerShell 7:
+
+```powershell
+./build/publish.ps1
 ```
 
-`tools/SmartPaste.LiveRun` runs the parser and label mapping against the real APIs (dev only; reads
-`OPENROUTER_API_KEY` and `TYPESAFE_API_KEY` from the environment, or from the `env` object of a JSON file passed with `--keys <file>`).
+[CONTRIBUTING.md](CONTRIBUTING.md) explains how to run Smart Paste from source without touching your own settings.
+
+## How the code is organized
+
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) walks through the projects, the threads, and the copy and paste flows.
+
+## Contributing
+
+Bug reports, ideas, and pull requests are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md). To report a
+security problem, follow [SECURITY.md](SECURITY.md). Everyone taking part follows the
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-MIT
+Smart Paste is released under the [MIT License](LICENSE). The open-source parts it is built on, and their licenses,
+are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Thanks
+
+- [TypeSafe](https://typesafe.ai), for Jev, the model that decides every paste.
+- [OpenRouter](https://openrouter.ai), for one key to run both the reader and Jev.
+- [WPF UI](https://github.com/lepoco/wpfui), for the Windows 11 look.
+- [H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon), for the tray icon.
+- [Velopack](https://github.com/velopack/velopack), for the installer and updates.
+- [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet), for the app's view models.
